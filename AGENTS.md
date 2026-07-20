@@ -1,6 +1,6 @@
 # hnfm-egui-test
 
-egui 自定义 material 3 组件测试代码，未来会移植到另一项目
+egui 自定义 material 3 组件测试代码，未来会移植到另一项目(https://github.com/sb-child/HoshinekoFM)
 
 ## 资源
 
