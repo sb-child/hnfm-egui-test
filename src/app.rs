@@ -50,7 +50,7 @@ impl eframe::App for AppLayout {
         egui::Panel::bottom("bottom-statusbar")
             .resizable(false)
             .show(ui, bottom_statusbar);
-        let my_frame = egui::containers::Frame {
+        let surface_frame = egui::containers::Frame {
             inner_margin: egui::epaint::Margin::symmetric(0, 4),
             outer_margin: egui::epaint::Margin::same(0),
             corner_radius: egui::CornerRadius::ZERO,
@@ -59,8 +59,9 @@ impl eframe::App for AppLayout {
             stroke: Stroke::NONE,
         };
         egui::Panel::left("navigation-rail")
-            .frame(my_frame)
+            .frame(surface_frame)
             .resizable(false)
+            .show_separator_line(false)
             .show(ui, |ui| {
                 nav_rail(
                     ui,
@@ -71,7 +72,9 @@ impl eframe::App for AppLayout {
                 )
             });
         egui::Panel::left("sidebar")
+            .frame(surface_frame)
             .resizable(false)
+            .show_separator_line(false)
             .show(ui, sidebar);
         egui::Panel::top("tabs").resizable(false).show(ui, tabs);
         egui::Panel::bottom("terminal-tab")
@@ -289,7 +292,12 @@ impl<'a> egui::Widget for NavRailItem<'a> {
             indicator_radius,
             calculated_indicator_overlay_color,
         );
-
+        // painter.rect_stroke(
+        //     rect,
+        //     CornerRadius::ZERO,
+        //     Stroke::new(1., calculated_icon_color),
+        //     egui::StrokeKind::Inside,
+        // ); // debug
         painter.circle_stroke(
             icon_center,
             24. / 2.,
@@ -356,8 +364,30 @@ impl CallbackTrait for RippleCallback {
     }
 }
 
+struct ListItem<'a> {
+    key: &'a str,
+    label: &'a str,
+    active: bool,
+}
+
+impl<'a> ListItem<'a> {
+    fn new(key: &'a str, label: &'a str, active: bool) -> Self {
+        Self { key, label, active }
+    }
+}
+
+impl<'a> egui::Widget for ListItem<'a> {
+    fn ui(self, ui: &mut egui::Ui) -> egui::Response {
+        let parent_width = ui.available_width();
+        let desired_size = Vec2::new(parent_width, 0.);
+        let (rect, response) = ui.allocate_exact_size(desired_size, Sense::click());
+
+        response
+    }
+}
+
 fn sidebar(ui: &mut egui::Ui) {
-    ui.set_width(200.);
+    ui.set_width(300.);
     ui.vertical(|ui| {
         ui.heading("侧边栏");
         if ui.button("test").clicked() {}
