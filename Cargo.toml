@@ -1,0 +1,14 @@
+[package]
+name = "hnfm-egui-test"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+eframe = "0.35.0"
+egui = { version = "0.35.0", default-features = false }
+egui-wgpu = { version = "0.35.0", features = ["wayland", "winit", "x11"] }
+egui_extras = "0.35.0"
+lazy_static = "1.5.0"
+material-color-utilities-rs = { git = "https://github.com/haiyewei/material-color-utilities-rs", rev = "d6f6dd1df3635c408835481087b47a842bd28050" }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.150"
