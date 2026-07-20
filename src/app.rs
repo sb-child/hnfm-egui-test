@@ -1,16 +1,19 @@
 use std::sync::Arc;
 
 use egui::{
-    Color32, CornerRadius, FontId, Id, Mesh, PaintCallback, Pos2, Rect, RichText, Sense, Shape,
-    Stroke, TextFormat, Vec2, Widget,
+    Color32, CornerRadius, FontFamily, FontId, Id, Mesh, PaintCallback, Pos2, Rect, RichText,
+    Sense, Shape, Stroke, TextFormat, Vec2, Widget,
     emath::easing,
     epaint::text::VariationCoords,
     text::{LayoutJob, TextWrapping},
 };
 use egui_wgpu::CallbackTrait;
 
-use crate::material::color::ThemeVariant;
-use crate::{fonts, material};
+use crate::{fonts::ff_serif, material::color::ThemeVariant};
+use crate::{
+    fonts::{self, ff_sans},
+    material,
+};
 
 pub struct AppLayout {
     terminal_expanded: bool,
@@ -20,6 +23,10 @@ pub struct AppLayout {
     active_2_before: bool,
     active_3: bool,
     active_opt: u8,
+    list_sel_std: bool,
+    list_sel_seg_0: bool,
+    list_sel_seg_1: bool,
+    list_sel_seg_2: bool,
 }
 
 impl AppLayout {
@@ -40,6 +47,10 @@ impl AppLayout {
             active_2_before: false,
             active_3: false,
             active_opt: 0,
+            list_sel_std: false,
+            list_sel_seg_0: false,
+            list_sel_seg_1: false,
+            list_sel_seg_2: false,
         }
     }
 }
@@ -75,7 +86,15 @@ impl eframe::App for AppLayout {
             .frame(surface_frame)
             .resizable(false)
             .show_separator_line(false)
-            .show(ui, sidebar);
+            .show(ui, |ui| {
+                sidebar(
+                    ui,
+                    &mut self.list_sel_std,
+                    &mut self.list_sel_seg_0,
+                    &mut self.list_sel_seg_1,
+                    &mut self.list_sel_seg_2,
+                )
+            });
         egui::Panel::top("tabs").resizable(false).show(ui, tabs);
         egui::Panel::bottom("terminal-tab")
             .resizable(true)
@@ -194,7 +213,7 @@ impl<'a> egui::Widget for NavRailItem<'a> {
         };
 
         let font_weight = 400. + 100. * active_anim;
-        let label_font_id = FontId::proportional(12.0);
+        let label_font_id = FontId::new(12.0, ff_sans());
 
         let layout_label = |ui: &mut egui::Ui, color: Color32| {
             let mut job = LayoutJob::default();
@@ -364,33 +383,368 @@ impl CallbackTrait for RippleCallback {
     }
 }
 
+fn lerp_corner_radius(a: CornerRadius, b: CornerRadius, t: f32) -> CornerRadius {
+    fn lerp_u8(a: u8, b: u8, t: f32) -> u8 {
+        (a as f32 + (b as f32 - a as f32) * t).round() as u8
+    }
+    CornerRadius {
+        nw: lerp_u8(a.nw, b.nw, t),
+        ne: lerp_u8(a.ne, b.ne, t),
+        sw: lerp_u8(a.sw, b.sw, t),
+        se: lerp_u8(a.se, b.se, t),
+    }
+}
+
 struct ListItem<'a> {
     key: &'a str,
-    label: &'a str,
+    headline: &'a str,
+    supporting: Option<&'a str>,
+    overline: Option<&'a str>,
     active: bool,
+    segmented: bool,
+    above: bool,
+    below: bool,
 }
 
 impl<'a> ListItem<'a> {
-    fn new(key: &'a str, label: &'a str, active: bool) -> Self {
-        Self { key, label, active }
+    #[allow(clippy::too_many_arguments)]
+    fn new(
+        key: &'a str,
+        headline: &'a str,
+        supporting: Option<&'a str>,
+        overline: Option<&'a str>,
+        active: bool,
+        segmented: bool,
+        above: bool,
+        below: bool,
+    ) -> Self {
+        Self {
+            key,
+            headline,
+            supporting,
+            overline,
+            active,
+            segmented,
+            above,
+            below,
+        }
     }
 }
 
 impl<'a> egui::Widget for ListItem<'a> {
     fn ui(self, ui: &mut egui::Ui) -> egui::Response {
         let parent_width = ui.available_width();
-        let desired_size = Vec2::new(parent_width, 0.);
+
+        let active_anim = {
+            let anim_id = Id::new(self.key).with("active");
+            ui.animate_bool_with_time_and_easing(anim_id, self.active, 0.2, easing::quadratic_out)
+        };
+
+        let text_max_width = parent_width - 16.0 - 24.0 - 16.0 - 16.0;
+
+        let layout_text = |ui: &egui::Ui,
+                           text: &str,
+                           font_size: f32,
+                           weight: f32,
+                           line_height: f32,
+                           max_rows: usize,
+                           color: Color32| {
+            let mut job = LayoutJob::default();
+            job.append(
+                text,
+                0.0,
+                TextFormat {
+                    font_id: FontId::new(font_size, ff_sans()),
+                    color,
+                    line_height: Some(line_height),
+                    coords: VariationCoords::new([(b"wght", weight)]),
+                    ..Default::default()
+                },
+            );
+            job.wrap = TextWrapping {
+                max_width: text_max_width,
+                max_rows,
+                overflow_character: None,
+                break_anywhere: false,
+            };
+            ui.fonts_mut(|f| f.layout_job(job))
+        };
+
+        let supporting_lines = self.supporting.map(|text| {
+            let galley = layout_text(ui, text, 14.0, 400.0, 20.0, 2, Color32::BLACK);
+            galley.rows.len().min(2)
+        });
+
+        let has_overline = self.overline.is_some();
+        let has_supporting = self.supporting.is_some();
+        let supporting_two_lines = supporting_lines.map_or(false, |n| n >= 2);
+
+        let container_height = match (has_overline, has_supporting, supporting_two_lines) {
+            (false, false, _) => 56.0,
+            (true, false, _) => 72.0,
+            (false, true, false) => 72.0,
+            (false, true, true) => 88.0,
+            (true, true, _) => 88.0,
+        };
+
+        let desired_size = Vec2::new(parent_width, container_height);
         let (rect, response) = ui.allocate_exact_size(desired_size, Sense::click());
+
+        let (
+            surface,
+            surface_container,
+            secondary_container,
+            on_surface,
+            on_surface_variant,
+            on_secondary_container,
+        ) = material::color::access(|_p, s| {
+            (
+                s.surface,
+                s.surface_container,
+                s.secondary_container,
+                s.on_surface,
+                s.on_surface_variant,
+                s.on_secondary_container,
+            )
+        });
+
+        let hov = response.hovered();
+        let hod = response.is_pointer_button_down_on();
+
+        let hover_anim = {
+            let anim_id = Id::new(self.key).with("hover");
+            ui.animate_bool_with_time_and_easing(anim_id, hov, 0.2, easing::quadratic_out)
+        };
+
+        let container_fill: Color32 = {
+            let default_fill: Color32 = if self.segmented {
+                surface_container.into()
+            } else {
+                surface.into()
+            };
+            let target: Color32 = secondary_container.into();
+            default_fill.lerp_to_gamma(target, active_anim)
+        };
+
+        let state_layer = {
+            let layer_alpha = 20u8;
+            let alpha = hover_anim * layer_alpha as f32 / 255.0
+                + if hod { layer_alpha as f32 / 255.0 } else { 0.0 };
+            on_surface.with_alpha_f32(alpha)
+        };
+
+        let headline_color = {
+            let c: Color32 = on_surface.into();
+            let target: Color32 = on_secondary_container.into();
+            c.lerp_to_gamma(target, active_anim.max(hover_anim))
+        };
+
+        let sub_text_color = {
+            let c: Color32 = on_surface_variant.into();
+            let target: Color32 = on_secondary_container.into();
+            c.lerp_to_gamma(target, active_anim)
+        };
+
+        let icon_color = {
+            let c: Color32 = on_surface_variant.into();
+            let target: Color32 = on_secondary_container.into();
+            c.lerp_to_gamma(target, active_anim)
+        };
+
+        let interaction_r =
+            (4.0 + 8.0 * hover_anim.max(active_anim) + 4.0 * active_anim).round() as u8;
+
+        let top_big = !self.above;
+        let bot_big = !self.below;
+
+        let top_anim = ui.animate_bool_with_time_and_easing(
+            Id::new(self.key).with("top-big"),
+            top_big,
+            0.2,
+            easing::quadratic_out,
+        );
+        let bot_anim = ui.animate_bool_with_time_and_easing(
+            Id::new(self.key).with("bot-big"),
+            bot_big,
+            0.2,
+            easing::quadratic_out,
+        );
+
+        let top_r = (4.0 + 8.0 * top_anim).round() as u8;
+        let bot_r = (4.0 + 8.0 * bot_anim).round() as u8;
+        let seg_corner = CornerRadius {
+            nw: top_r,
+            ne: top_r,
+            sw: bot_r,
+            se: bot_r,
+        };
+
+        let use_segmented = self.segmented && !self.active && !hov;
+        let seg_mode_anim = ui.animate_bool_with_time_and_easing(
+            Id::new(self.key).with("seg-shape"),
+            use_segmented,
+            0.2,
+            easing::quadratic_out,
+        );
+
+        let interaction_corner = CornerRadius::same(interaction_r);
+        let corner_radius = lerp_corner_radius(interaction_corner, seg_corner, seg_mode_anim);
+
+        let headline_galley = layout_text(ui, self.headline, 16.0, 400.0, 24.0, 1, headline_color);
+        let supporting_galley = self
+            .supporting
+            .map(|t| layout_text(ui, t, 14.0, 400.0, 20.0, 2, sub_text_color));
+        let overline_galley = self
+            .overline
+            .map(|t| layout_text(ui, t, 11.0, 500.0, 16.0, 1, sub_text_color));
+
+        let painter = ui.painter();
+        painter.rect_filled(rect, corner_radius, container_fill);
+        if state_layer.a() > 0 {
+            painter.rect_filled(rect, corner_radius, state_layer);
+        }
+
+        let icon_center = Pos2::new(rect.left() + 16.0 + 12.0, rect.center().y);
+        painter.circle_stroke(icon_center, 24.0 / 2.0, Stroke::new(1.0, icon_color));
+
+        let text_left = rect.left() + 16.0 + 24.0 + 16.0;
+        let headline_h = headline_galley.size().y;
+        let overline_h = overline_galley.as_ref().map_or(0.0, |g| g.size().y);
+        let supporting_h = supporting_galley.as_ref().map_or(0.0, |g| g.size().y);
+        let text_block_height = overline_h + headline_h + supporting_h;
+
+        let text_top = if has_supporting || has_overline {
+            rect.top() + 10.0
+        } else {
+            rect.center().y - text_block_height / 2.0
+        };
+
+        let mut y = text_top;
+        if let Some(ref galley) = overline_galley {
+            painter.galley(Pos2::new(text_left, y), galley.clone(), sub_text_color);
+            y += galley.size().y;
+        }
+        painter.galley(
+            Pos2::new(text_left, y),
+            headline_galley.clone(),
+            headline_color,
+        );
+        y += headline_galley.size().y;
+        if let Some(ref galley) = supporting_galley {
+            painter.galley(Pos2::new(text_left, y), galley.clone(), sub_text_color);
+        }
 
         response
     }
 }
 
-fn sidebar(ui: &mut egui::Ui) {
+fn sidebar(
+    ui: &mut egui::Ui,
+    list_sel_std: &mut bool,
+    list_sel_seg_0: &mut bool,
+    list_sel_seg_1: &mut bool,
+    list_sel_seg_2: &mut bool,
+) {
     ui.set_width(300.);
+    ui.style_mut().spacing.item_spacing = Vec2::new(0.0, 0.0);
+
+    ui.heading("Standard (单选)");
+    ui.add_space(4.);
     ui.vertical(|ui| {
-        ui.heading("侧边栏");
-        if ui.button("test").clicked() {}
+        ui.style_mut().spacing.item_spacing = Vec2::new(0., 2.);
+        if ListItem::new(
+            "std_0",
+            "我的世界",
+            None,
+            None,
+            *list_sel_std,
+            false,
+            false,
+            false,
+        )
+        .ui(ui)
+        .clicked()
+        {
+            *list_sel_std = true;
+        }
+        if ListItem::new(
+            "std_1",
+            "进入1qjkl异世界",
+            Some("qqqqqqq1111"),
+            None,
+            !*list_sel_std,
+            false,
+            false,
+            false,
+        )
+        .ui(ui)
+        .clicked()
+        {
+            *list_sel_std = false;
+        }
+    });
+
+    ui.add_space(16.);
+    ui.heading("Segmented (多选)");
+    ui.add_space(4.);
+
+    let seg0 = *list_sel_seg_0;
+    let seg1 = *list_sel_seg_1;
+    let seg2 = *list_sel_seg_2;
+
+    let sego_above_0 = false;
+    let sego_below_0 = !seg1;
+    let sego_above_1 = !seg0;
+    let sego_below_1 = !seg2;
+    let sego_above_2 = !seg1;
+    let sego_below_2 = false;
+    ui.vertical(|ui| {
+        ui.style_mut().spacing.item_spacing = Vec2::new(0., 2.);
+        if ListItem::new(
+            "seg_0",
+            "叫我起床",
+            None,
+            None,
+            seg0,
+            true,
+            sego_above_0,
+            sego_below_0,
+        )
+        .ui(ui)
+        .clicked()
+        {
+            *list_sel_seg_0 = !*list_sel_seg_0;
+        }
+        if ListItem::new(
+            "seg_1",
+            "别叫我起床",
+            Some("因为我想多睡点觉"),
+            None,
+            seg1,
+            true,
+            sego_above_1,
+            sego_below_1,
+        )
+        .ui(ui)
+        .clicked()
+        {
+            *list_sel_seg_1 = !*list_sel_seg_1;
+        }
+        if ListItem::new(
+            "seg_2",
+            "在半夜叫我",
+            Some("喵喵11111111111111111122222211111111111111111"),
+            Some("嗯111111"),
+            seg2,
+            true,
+            sego_above_2,
+            sego_below_2,
+        )
+        .ui(ui)
+        .clicked()
+        {
+            *list_sel_seg_2 = !*list_sel_seg_2;
+        }
     });
 }
 

@@ -1,0 +1,23 @@
+[metadata]
+title = "ListItem 组件实现"
+created_at = "2026-07-20 22:36:25 UTC+8"
+modified_at = "2026-07-20 23:52:25 UTC+8"
+
+[[sections]]
+number = "1"
+title = "M3 ListItem 组件实现"
+created_at = "2026-07-20 22:36:25 UTC+8"
+modified_at = "2026-07-20 22:36:25 UTC+8"
+content = "在 `src/app.rs` 实现了 M3 ListItem 组件，对齐 Compose M3 `ListItem.kt` 及 `ListTokens.kt` / `TypeScaleTokens.kt` 规范。\n\n## 组件结构\n```rust\nstruct ListItem<'a> {\n    key: &'a str,           // 动画 ID\n    headline: &'a str,      // 主文字 (BodyLarge, 16px, 400w, 单行)\n    supporting: Option<&'a str>,  // 副文字 (BodyMedium, 14px, 400w, 最多2行)\n    overline: Option<&'a str>,    // 上方标签 (LabelSmall, 11px, 500w, 单行)\n    active: bool,           // 选中态\n    segmented: bool,        // true=多选模式, false=单选模式\n    above: f32,             // 上方相邻项状态 (0=断层大圆角, 1=连接小圆角)\n    below: f32,             // 下方相邻项状态\n}\n```\n\n## 容器高度\n- headline only → 56dp\n- headline + overline 或 + supporting(单行) → 72dp\n- headline + supporting(双行) 或 + overline + supporting → 88dp\n\n## 颜色方案\n| 状态 | Standard (surface) | Segmented (surface_container) |\n|------|---------------------|-------------------------------|\n| 默认容器 | surface (融入背景) | surface_container (可见卡片) |\n| 选中容器 | secondary_container | secondary_container |\n| 文字默认 | on_surface / on_surface_variant | 同 |\n| 文字选中 | on_secondary_container | 同 |\n\n## 圆角\n- 交互态 (hover/select): CornerExtraSmall(4) → CornerMedium(12) → CornerLarge(16)\n- 自身空闲时 segmented 模式: above/below 控制各侧圆角 (4↔16)\n- 自身交互时: 四角统一，覆盖 above/below 影响\n\n## 动画 (0.2s quadratic_out)\n- active_anim: 容器填充色 + 文字/图标色 + 圆角\n- hover_anim: 辅助文字色 (headline only) + 圆角 + state layer (on_surface @ 8%)\n- press: state layer (on_surface @ 8%)\n\n## 示例调用\nsidebar 中增加了 Standard (单选) 和 Segmented (多选) 两组示例。"
+desc = "实现 M3 ListItem 组件，包含 standard/segmented 模式、颜色动画、圆角、文字排版等"
+
+[[sections]]
+number = "2"
+title = "Segmented 圆角动画重构：above/below bool化 + 3层动画"
+created_at = "2026-07-20 23:52:06 UTC+8"
+modified_at = "2026-07-20 23:52:25 UTC+8"
+content = "## 改动\n\n### 1. above/below: f32 → bool\n- `ListItem.above: bool` — true = 有上方邻居（小圆角4px），false = 自由/邻居active（大圆角12px）\n- `ListItem.below: bool` — true = 有下方邻居（小圆角4px），false = 自由/邻居active（大圆角12px）\n- 侧边栏计算从 `if !seg1 { 1.0 } else { 0.0 }` 简化为 `!seg1`\n\n### 2. 3层 corner radius 动画\n每层都由 `animate_bool_with_time_and_easing` 驱动，0.2s quadratic_out：\n\n**层1: `top_anim` / `bot_anim`** — segmented 形状内部的 corner 值变化\n- 邻居 toggle active → above/below 从 true→false → corner 从 4px 平滑过渡到 12px\n\n**层2: `seg_mode_anim`** — segmented 形状 ↔ interaction 形状过渡  \n- `use_segmented = self.segmented && !self.active && !hov`\n- hover 进入时从 segmented 形状 lerp 到 interaction 形状\n\n**层3: `interaction_r`** — interaction 形状自身从 4→12→16\n- `4 + 8*hover_anim.max(active_anim) + 4*active_anim`\n- 默认4 / hover12 / active16\n\n### 3. lerp_corner_radius 辅助函数\n对 CornerRadius 的 nw/ne/sw/se 四个角分别做线性插值。\n\n### 4. M3 对齐\n- CornerExtraSmall = 4dp（默认、segmented 连接角）\n- CornerMedium = 12dp（hover、segmented 自由角）  \n- CornerLarge = 16dp（selected/pressed）\n- CornerNone = 0dp（M3 segmented override — 本项目不使用，因为有外层容器差异）\n\n## 效果\nhover 时圆角从 segmented 形状平滑变形到 interaction 形状，不再从 4px 跳变到 16px。\n邻居 toggle active 时相邻 item 的大圆角也平滑过渡。\n"
+desc = "重构 segmented button 圆角系统：above/below 从 f32 改为 bool，实现 3 层动画——neighbor toggle 动画、segmented↔interaction 形变动画、interaction_r 自身动画，解决 hover 时圆角跳变问题。"
+
+[todo]
+items = []
