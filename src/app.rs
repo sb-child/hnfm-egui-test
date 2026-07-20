@@ -4,6 +4,7 @@ use egui::{
     Color32, CornerRadius, FontId, Id, Mesh, PaintCallback, Pos2, Rect, RichText, Sense, Shape,
     Stroke, TextFormat, Vec2, Widget,
     emath::easing,
+    epaint::text::VariationCoords,
     text::{LayoutJob, TextWrapping},
 };
 use egui_wgpu::CallbackTrait;
@@ -270,6 +271,7 @@ impl<'a> egui::Widget for NavRailItem<'a> {
             c
         };
 
+        let font_weight = 400. + 100. * active_anim;
         let mut label_job = LayoutJob::default();
         let label_font_id = FontId::proportional(12.0);
         label_job.append(
@@ -279,6 +281,7 @@ impl<'a> egui::Widget for NavRailItem<'a> {
                 font_id: label_font_id.clone(),
                 color: calculated_label_color,
                 line_height: Some(16.),
+                coords: VariationCoords::new([(b"wght", font_weight)]),
                 ..Default::default()
             },
         );
