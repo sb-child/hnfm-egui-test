@@ -9,6 +9,7 @@ use egui::{
 };
 use egui_wgpu::CallbackTrait;
 
+use crate::material::color::ThemeVariant;
 use crate::{fonts, material};
 
 pub struct AppLayout {
@@ -25,9 +26,12 @@ impl AppLayout {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
         fonts::add_fonts(&cc.egui_ctx);
         fonts::configure_text_styles(&cc.egui_ctx, fonts::TextStyleOpt::Sans);
-        let theme = material::color::generate_theme(0xff769CDF, Some(0xff8991A2));
+        let theme = material::color::generate_theme(ThemeVariant::Cmf {
+            primary: 0xff769CDF,
+            secondary: Some(0xff8991A2),
+        });
         material::color::set_global_scheme(theme);
-        material::color::set_global_theme_mode(material::color::ThemeMode::DarkMediumContrast);
+        material::color::set_global_theme_mode(material::color::ThemeMode::Dark);
         Self {
             terminal_expanded: true,
             active_1: false,
@@ -78,18 +82,24 @@ impl eframe::App for AppLayout {
         egui::CentralPanel::default().show(ui, content);
         if self.active_1 != self.active_1_before {
             let new_theme_mode = if self.active_1 {
-                material::color::ThemeMode::LightMediumContrast
+                material::color::ThemeMode::Light
             } else {
-                material::color::ThemeMode::DarkMediumContrast
+                material::color::ThemeMode::Dark
             };
             material::color::set_global_theme_mode(new_theme_mode);
             self.active_1_before = self.active_1;
         }
         if self.active_2 != self.active_2_before {
             let new_theme = if self.active_2 {
-                material::color::generate_theme(0xffB33B15, Some(0xffB88576))
+                material::color::generate_theme(ThemeVariant::Cmf {
+                    primary: 0xffB33B15,
+                    secondary: Some(0xffB88576),
+                })
             } else {
-                material::color::generate_theme(0xff769CDF, Some(0xff8991A2))
+                material::color::generate_theme(ThemeVariant::Cmf {
+                    primary: 0xff769CDF,
+                    secondary: Some(0xff8991A2),
+                })
             };
             material::color::set_global_scheme(new_theme);
             self.active_2_before = self.active_2;
@@ -167,11 +177,7 @@ struct NavRailItem<'a> {
 
 impl<'a> NavRailItem<'a> {
     fn new(key: &'a str, label: &'a str, active: bool) -> Self {
-        Self {
-            key,
-            label,
-            active,
-        }
+        Self { key, label, active }
     }
 }
 
@@ -237,43 +243,30 @@ impl<'a> egui::Widget for NavRailItem<'a> {
         let hod = response.is_pointer_button_down_on();
         let pos = response.interact_pointer_pos();
 
+        let hover_anim = {
+            let anim_id = Id::new(self.key).with("hover");
+            ui.animate_bool_with_time_and_easing(anim_id, hov, 0.2, easing::quadratic_out)
+        };
+
         let calculated_indicator_color = secondary_container_color.with_alpha_f32(active_anim);
 
         let calculated_indicator_overlay_color = {
-            let base_color = Color32::TRANSPARENT;
-            let mix_hover = if hov {
-                let layer = on_surface_color.with_alpha_u8(layer_alpha);
-                base_color.blend(layer)
-            } else {
-                base_color
-            };
-            let mix_hold = if hod {
-                let layer = on_surface_color.with_alpha_u8(layer_alpha);
-                mix_hover.blend(layer)
-            } else {
-                mix_hover
-            };
-            mix_hold
+            let overlay_alpha = hover_anim * layer_alpha as f32 / 255.
+                + if hod { layer_alpha as f32 / 255. } else { 0. };
+            on_surface_color.with_alpha_f32(overlay_alpha)
         };
 
         let calculated_label_color = {
-            let c: Color32 = if self.active || hov {
-                on_surface_color
-            } else {
-                on_surface_variant_color
-            }
-            .into();
-            c
+            let t = active_anim.max(hover_anim);
+            let c: Color32 = on_surface_variant_color.into();
+            let target: Color32 = on_surface_color.into();
+            c.lerp_to_gamma(target, t)
         };
 
         let calculated_icon_color = {
-            let c: Color32 = if self.active {
-                on_secondary_container_color
-            } else {
-                on_surface_color
-            }
-            .into();
-            c
+            let c: Color32 = on_surface_color.into();
+            let target: Color32 = on_secondary_container_color.into();
+            c.lerp_to_gamma(target, active_anim)
         };
 
         let label_galley = layout_label(ui, calculated_label_color);

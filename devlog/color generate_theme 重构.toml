@@ -1,0 +1,23 @@
+[metadata]
+title = "color generate_theme 重构"
+created_at = "2026-07-20 19:35:46 UTC+8"
+modified_at = "2026-07-20 19:43:15 UTC+8"
+
+[[sections]]
+number = "1"
+title = "用 DynamicScheme::new 替代 SchemeCmf，修正 contrast_level"
+created_at = "2026-07-20 19:35:46 UTC+8"
+modified_at = "2026-07-20 19:35:46 UTC+8"
+content = "## 变更摘要\n\n重构 `generate_theme()`，用 `DynamicScheme::new(DynamicSchemeOptions)` 手写 options 替代之前的 `SchemeCmf::from_hcts_with_options`。\n\n## 主要变更\n\n### 1. ThemeVariant enum 重构\n\n从无数据 enum 改为带颜色数据的 enum：\n\n```rust\npub enum ThemeVariant {\n    Monochrome { seed: u32 },\n    Neutral { seed: u32 },\n    TonalSpot { seed: u32 },\n    Vibrant { seed: u32 },\n    Expressive { seed: u32 },\n    Fidelity { seed: u32 },\n    Content { seed: u32 },\n    Rainbow { seed: u32 },\n    FruitSalad { seed: u32 },\n    Cmf { primary: u32, secondary: Option<u32> },\n}\n```\n\n- 非 CMF 变体：每个自带 `seed` 颜色\n- CMF 变体：支持双色（`primary` + `secondary`）\n\n新增辅助方法：\n- `to_variant()` → 映射到 crate 的 `Variant` 枚举\n- `seed_argb()` → 提取主色\n- `source_hcts()` → 转换为 `Vec<Hct>`\n\n### 2. generate_theme API 简化\n\n```rust\n// 旧：2 个参数\ngenerate_theme(u32, Option<u32>) -> MaterialColorTheme\n\n// 新：1 个参数\ngenerate_theme(ThemeVariant) -> MaterialColorTheme\n```\n\n### 3. 用 DynamicScheme::new 手写 options\n\n从 `SchemeCmf::from_hcts_with_options` 迁移到 `DynamicScheme::new(DynamicSchemeOptions{...})`：\n\n- 公共 option 提取进 `make_scheme` 闭包\n- 非 CMF 变体：palettes 全传 `None`，由 `DynamicScheme` 内部自动生成\n- CMF 变体：复用原有的 palette 逻辑（通过独立函数 `cmf_palettes()`）\n- `cmf_error_hue()` 从 `SchemeCmf::get_error_hue` 内联复制\n\n### 4. contrast_level 修正\n\n| 主题模式 | 旧值 | 新值 | Material3 语义 |\n|----------|------|------|----------------|\n| Light / Dark | -1.0 | **0.0** | Standard |\n| MediumContrast | 0.0 | **0.5** | Medium |\n| HighContrast | 1.0 | 1.0 | High |\n\n旧值用 `-1.0` (Reduced/Low contrast) 作为默认、`0.0` (Standard) 作为中对比度，不符合 M3 规范。\n\n### 5. 调用方更新\n\n`app.rs` 中 3 处调用改为新签名：\n\n```rust\ngenerate_theme(ThemeVariant::Cmf {\n    primary: 0xff769CDF,\n    secondary: Some(0xff8991A2),\n})\n```"
+desc = "重构 generate_theme：用 DynamicScheme::new 替代 SchemeCmf，ThemeVariant 包装颜色数据，修正 contrast_level 映射"
+
+[[sections]]
+number = "2"
+title = "对比测试验证"
+created_at = "2026-07-20 19:43:15 UTC+8"
+modified_at = "2026-07-20 19:43:15 UTC+8"
+content = "## 测试架构\n\n用 crate 自带的 variant wrapper（如 `SchemeTonalSpot`、`SchemeCmf` 等）作为权威参考，通过 `DynamicScheme` deref 调用颜色方法，逐字段对比我们的 `generate_theme` 输出。\n\n### 覆盖范围\n\n- 10 个 variant：Monochrome / Neutral / TonalSpot / Vibrant / Expressive / Fidelity / Content / Rainbow / FruitSalad / Cmf\n- 6 种对比度组合：light/dark × standard(0.0)/medium(0.5)/high(1.0)\n- 每种组合对比全部 46 个颜色字段\n\n### 工具宏\n\n- `assert_scheme_eq!` — 对 `Scheme` 和 `DynamicScheme` 做逐字段 `assert_eq!`，失败时打印字段名\n- `test_variant!` — 生成非 CMF variant 的测试函数，循环 6 种组合\n\n### 结果\n\n全部 10 个测试通过，证明 `generate_theme` 的 `DynamicScheme::new(DynamicSchemeOptions{...})` 与 crate 官方 wrapper 完全等价。"
+desc = "用 crate 官方 variant wrapper 作为参考实现，验证 generate_theme 全部 10 variant × 6 对比度组合的颜色输出"
+
+[todo]
+items = []
