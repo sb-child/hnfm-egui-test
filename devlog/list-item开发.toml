@@ -1,0 +1,15 @@
+[metadata]
+title = "list-item开发"
+created_at = "2026-07-21 00:29:41 UTC+8"
+modified_at = "2026-07-21 00:29:41 UTC+8"
+
+[[sections]]
+number = "1"
+title = "ListItem container_height 改为动态计算"
+created_at = "2026-07-21 00:29:41 UTC+8"
+modified_at = "2026-07-21 00:29:41 UTC+8"
+content = "ListItem 的 container_height 从固定 match 改为基于实际文本排版动态计算：\n\n- 预排版 headline/supporting/overline 的 galley，获取实际高度\n- container_height = max(56, text_block_total + 20)，即上下各 10dp 间距 + 实际内容高度，纯 headline 时最小 56dp（保留 icon 居中空间）\n- 之前 match (has_overline, has_supporting, supporting_two_lines) 的问题：bottom 间距比 top 多，因为 M3 固定高度 72/88 减去 10+内容 后的余量全堆到底部\n- 现在上下间距严格一致（各 10dp）\n\nM3 规范参考：ListTokens.kt 规定 ItemTopSpace=10dp, ItemBottomSpace=10dp，BodyLarge=16sp/24sp, BodyMedium=14sp/20sp, LabelSmall=11sp/16sp"
+desc = "将 ListItem 的容器高度从固定 match 改为基于实际文本排版高度动态计算，解决上下间距不对称问题"
+
+[todo]
+items = []

@@ -215,14 +215,14 @@ impl<'a> egui::Widget for NavRailItem<'a> {
         let font_weight = 400. + 100. * active_anim;
         let label_font_id = FontId::new(12.0, ff_sans());
 
-        let layout_label = |ui: &mut egui::Ui, color: Color32| {
+        let label_galley = {
             let mut job = LayoutJob::default();
             job.append(
                 self.label,
                 0.0,
                 TextFormat {
                     font_id: label_font_id.clone(),
-                    color,
+                    color: Color32::PLACEHOLDER,
                     line_height: Some(16.),
                     coords: VariationCoords::new([(b"wght", font_weight)]),
                     ..Default::default()
@@ -238,8 +238,7 @@ impl<'a> egui::Widget for NavRailItem<'a> {
             ui.fonts_mut(|f: &mut egui::epaint::FontsView<'_>| f.layout_job(job))
         };
 
-        let label_galley_pre = layout_label(ui, Color32::BLACK);
-        let num_rows = label_galley_pre.rows.len();
+        let num_rows = label_galley.rows.len();
         let container_height = if num_rows <= 1 { 56. } else { 72. };
 
         let desired_size = Vec2::new(parent_width, container_height);
@@ -259,7 +258,7 @@ impl<'a> egui::Widget for NavRailItem<'a> {
             )
         });
 
-        let layer_alpha = 20u8;
+        let layer_alpha = 0.08;
 
         let hov = response.hovered();
         let hod = response.is_pointer_button_down_on();
@@ -273,8 +272,7 @@ impl<'a> egui::Widget for NavRailItem<'a> {
         let calculated_indicator_color = secondary_container_color.with_alpha_f32(active_anim);
 
         let calculated_indicator_overlay_color = {
-            let overlay_alpha = hover_anim * layer_alpha as f32 / 255.
-                + if hod { layer_alpha as f32 / 255. } else { 0. };
+            let overlay_alpha = hover_anim * layer_alpha + if hod { layer_alpha } else { 0. };
             on_surface_color.with_alpha_f32(overlay_alpha)
         };
 
@@ -291,7 +289,6 @@ impl<'a> egui::Widget for NavRailItem<'a> {
             c.lerp_to_gamma(target, active_anim)
         };
 
-        let label_galley = layout_label(ui, calculated_label_color);
         let label_text_anchor = Pos2::new(rect.center().x, rect.top() + 40.);
         let painter = ui.painter();
         let icon_center = Pos2::new(rect.center().x, rect.top() + 20.);
@@ -447,15 +444,14 @@ impl<'a> egui::Widget for ListItem<'a> {
                            font_size: f32,
                            weight: f32,
                            line_height: f32,
-                           max_rows: usize,
-                           color: Color32| {
+                           max_rows: usize| {
             let mut job = LayoutJob::default();
             job.append(
                 text,
                 0.0,
                 TextFormat {
                     font_id: FontId::new(font_size, ff_sans()),
-                    color,
+                    color: Color32::PLACEHOLDER,
                     line_height: Some(line_height),
                     coords: VariationCoords::new([(b"wght", weight)]),
                     ..Default::default()
@@ -470,22 +466,23 @@ impl<'a> egui::Widget for ListItem<'a> {
             ui.fonts_mut(|f| f.layout_job(job))
         };
 
-        let supporting_lines = self.supporting.map(|text| {
-            let galley = layout_text(ui, text, 14.0, 400.0, 20.0, 2, Color32::BLACK);
-            galley.rows.len().min(2)
-        });
+        let headline_galley = layout_text(ui, self.headline, 16.0, 400.0, 24.0, 1);
+        let supporting_galley = self
+            .supporting
+            .map(|t| layout_text(ui, t, 14.0, 400.0, 20.0, 2));
+        let overline_galley = self
+            .overline
+            .map(|t| layout_text(ui, t, 11.0, 500.0, 16.0, 1));
 
         let has_overline = self.overline.is_some();
         let has_supporting = self.supporting.is_some();
-        let supporting_two_lines = supporting_lines.map_or(false, |n| n >= 2);
 
-        let container_height = match (has_overline, has_supporting, supporting_two_lines) {
-            (false, false, _) => 56.0,
-            (true, false, _) => 72.0,
-            (false, true, false) => 72.0,
-            (false, true, true) => 88.0,
-            (true, true, _) => 88.0,
-        };
+        let headline_h = headline_galley.size().y;
+        let supporting_h = supporting_galley.as_ref().map_or(0.0, |g| g.size().y);
+        let overline_h = overline_galley.as_ref().map_or(0.0, |g| g.size().y);
+        let text_block_height = overline_h + headline_h + supporting_h;
+
+        let container_height = (text_block_height + 20.0).max(56.0);
 
         let desired_size = Vec2::new(parent_width, container_height);
         let (rect, response) = ui.allocate_exact_size(desired_size, Sense::click());
@@ -527,9 +524,8 @@ impl<'a> egui::Widget for ListItem<'a> {
         };
 
         let state_layer = {
-            let layer_alpha = 20u8;
-            let alpha = hover_anim * layer_alpha as f32 / 255.0
-                + if hod { layer_alpha as f32 / 255.0 } else { 0.0 };
+            let layer_alpha = 0.08;
+            let alpha = hover_anim * layer_alpha + if hod { layer_alpha } else { 0.0 };
             on_surface.with_alpha_f32(alpha)
         };
 
@@ -589,14 +585,6 @@ impl<'a> egui::Widget for ListItem<'a> {
 
         let interaction_corner = CornerRadius::same(interaction_r);
         let corner_radius = lerp_corner_radius(interaction_corner, seg_corner, seg_mode_anim);
-
-        let headline_galley = layout_text(ui, self.headline, 16.0, 400.0, 24.0, 1, headline_color);
-        let supporting_galley = self
-            .supporting
-            .map(|t| layout_text(ui, t, 14.0, 400.0, 20.0, 2, sub_text_color));
-        let overline_galley = self
-            .overline
-            .map(|t| layout_text(ui, t, 11.0, 500.0, 16.0, 1, sub_text_color));
 
         let painter = ui.painter();
         painter.rect_filled(rect, corner_radius, container_fill);

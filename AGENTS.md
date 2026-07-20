@@ -8,3 +8,6 @@ material3 规范：
 
 - github_search_code mcp: `query=xxx, repo:androidx/androidx`
 - github: `https://raw.githubusercontent.com/androidx/androidx/androidx-main/compose/material3/material3/src/commonMain/kotlin/androidx/compose/material3/tokens/xxx.kt`
+
+动 material3 组件先看规范，以规范为准。
+

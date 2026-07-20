@@ -1,7 +1,7 @@
 [metadata]
 title = "ListItem 组件实现"
 created_at = "2026-07-20 22:36:25 UTC+8"
-modified_at = "2026-07-20 23:52:25 UTC+8"
+modified_at = "2026-07-21 00:41:56 UTC+8"
 
 [[sections]]
 number = "1"
@@ -18,6 +18,14 @@ created_at = "2026-07-20 23:52:06 UTC+8"
 modified_at = "2026-07-20 23:52:25 UTC+8"
 content = "## 改动\n\n### 1. above/below: f32 → bool\n- `ListItem.above: bool` — true = 有上方邻居（小圆角4px），false = 自由/邻居active（大圆角12px）\n- `ListItem.below: bool` — true = 有下方邻居（小圆角4px），false = 自由/邻居active（大圆角12px）\n- 侧边栏计算从 `if !seg1 { 1.0 } else { 0.0 }` 简化为 `!seg1`\n\n### 2. 3层 corner radius 动画\n每层都由 `animate_bool_with_time_and_easing` 驱动，0.2s quadratic_out：\n\n**层1: `top_anim` / `bot_anim`** — segmented 形状内部的 corner 值变化\n- 邻居 toggle active → above/below 从 true→false → corner 从 4px 平滑过渡到 12px\n\n**层2: `seg_mode_anim`** — segmented 形状 ↔ interaction 形状过渡  \n- `use_segmented = self.segmented && !self.active && !hov`\n- hover 进入时从 segmented 形状 lerp 到 interaction 形状\n\n**层3: `interaction_r`** — interaction 形状自身从 4→12→16\n- `4 + 8*hover_anim.max(active_anim) + 4*active_anim`\n- 默认4 / hover12 / active16\n\n### 3. lerp_corner_radius 辅助函数\n对 CornerRadius 的 nw/ne/sw/se 四个角分别做线性插值。\n\n### 4. M3 对齐\n- CornerExtraSmall = 4dp（默认、segmented 连接角）\n- CornerMedium = 12dp（hover、segmented 自由角）  \n- CornerLarge = 16dp（selected/pressed）\n- CornerNone = 0dp（M3 segmented override — 本项目不使用，因为有外层容器差异）\n\n## 效果\nhover 时圆角从 segmented 形状平滑变形到 interaction 形状，不再从 4px 跳变到 16px。\n邻居 toggle active 时相邻 item 的大圆角也平滑过渡。\n"
 desc = "重构 segmented button 圆角系统：above/below 从 f32 改为 bool，实现 3 层动画——neighbor toggle 动画、segmented↔interaction 形变动画、interaction_r 自身动画，解决 hover 时圆角跳变问题。"
+
+[[sections]]
+number = "3"
+title = "文本布局优化：Color32::PLACEHOLDER 消除双重布局"
+created_at = "2026-07-21 00:41:56 UTC+8"
+modified_at = "2026-07-21 00:41:56 UTC+8"
+content = ""
+desc = "NavRailItem 和 ListItem 中的文本从双重 layout_job（一次用 BLACK 测高，一次用目标色绘制）改为单次布局（PLACEHOLDER），painter.galley 的 fallback_color 自动替换颜色，省去每个文本一次 text shaping + mesh tessellation"
 
 [todo]
 items = []
