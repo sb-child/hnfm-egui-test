@@ -17,6 +17,16 @@ impl Into<Color32> for Color24 {
     }
 }
 
+impl Color24 {
+    pub fn with_alpha_u8(&self, a: u8) -> Color32 {
+        Color32::from_rgba_unmultiplied(self.r, self.g, self.b, a)
+    }
+
+    pub fn with_alpha_f32(&self, a: f32) -> Color32 {
+        Color32::from_rgba_unmultiplied(self.r, self.g, self.b, (a * 255.) as u8)
+    }
+}
+
 impl<'de> Deserialize<'de> for Color24 {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where

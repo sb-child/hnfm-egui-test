@@ -134,9 +134,9 @@ macro_rules! build_palettes {
     };
 }
 
-pub fn set_global_scheme() {
-    let primary = Hct::from_int(0xff769CDF);
-    let secondary = Hct::from_int(0xff8991A2);
+pub fn generate_theme(primary_argb: u32, secondary_argb: Option<u32>) -> MaterialColorTheme {
+    let primary = Hct::from_int(primary_argb);
+    let secondary = secondary_argb.map_or(primary, Hct::from_int);
 
     let scheme_light = SchemeCmf::from_hcts_with_options(
         vec![primary, secondary],
@@ -188,10 +188,10 @@ pub fn set_global_scheme() {
     .unwrap();
 
     let theme = MaterialColorTheme {
-        description: "CMF scheme: primary=#769CDF, secondary=#8991A2".into(),
-        seed: argb_to_color24(0xFF769CDF),
+        description: "".into(),
+        seed: argb_to_color24(primary_argb),
         core_colors: CoreColors {
-            primary: argb_to_color24(0xFF769CDF),
+            primary: argb_to_color24(primary_argb),
         },
         extended_colors: vec![],
         schemes: Schemes {
@@ -204,7 +204,10 @@ pub fn set_global_scheme() {
         },
         palettes: build_palettes!(scheme_light),
     };
+    theme
+}
 
+pub fn set_global_scheme(theme: MaterialColorTheme) {
     let mut t = GLOBAL_SCHEME.write().unwrap();
     t.replace(theme);
     drop(t);

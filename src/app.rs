@@ -1,7 +1,10 @@
 use std::sync::Arc;
 
 use egui::{
-    Color32, CornerRadius, FontId, Mesh, PaintCallback, Pos2, Rect, RichText, Sense, Shape, Stroke, TextFormat, Vec2, Widget, text::{LayoutJob, TextWrapping},
+    Color32, CornerRadius, FontId, Id, Mesh, PaintCallback, Pos2, Rect, RichText, Sense, Shape,
+    Stroke, TextFormat, Vec2, Widget,
+    emath::easing,
+    text::{LayoutJob, TextWrapping},
 };
 use egui_wgpu::CallbackTrait;
 
@@ -10,7 +13,9 @@ use crate::{fonts, material};
 pub struct AppLayout {
     terminal_expanded: bool,
     active_1: bool,
+    active_1_before: bool,
     active_2: bool,
+    active_2_before: bool,
     active_3: bool,
     active_4: bool,
     active_5: bool,
@@ -21,12 +26,15 @@ impl AppLayout {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
         fonts::add_fonts(&cc.egui_ctx);
         fonts::configure_text_styles(&cc.egui_ctx, fonts::TextStyleOpt::Sans);
-        material::color::set_global_scheme();
+        let theme = material::color::generate_theme(0xff769CDF, Some(0xff8991A2));
+        material::color::set_global_scheme(theme);
         material::color::set_global_theme_mode(material::color::ThemeMode::DarkMediumContrast);
         Self {
             terminal_expanded: true,
             active_1: false,
+            active_1_before: false,
             active_2: false,
+            active_2_before: false,
             active_3: false,
             active_4: false,
             active_5: false,
@@ -73,6 +81,24 @@ impl eframe::App for AppLayout {
             .size_range(60.0..=600.0)
             .show_collapsible(ui, &mut self.terminal_expanded, terminal);
         egui::CentralPanel::default().show(ui, content);
+        if self.active_1 != self.active_1_before {
+            let new_theme_mode = if self.active_1 {
+                material::color::ThemeMode::LightMediumContrast
+            } else {
+                material::color::ThemeMode::DarkMediumContrast
+            };
+            material::color::set_global_theme_mode(new_theme_mode);
+            self.active_1_before = self.active_1;
+        }
+        if self.active_2 != self.active_2_before {
+            let new_theme = if self.active_2 {
+                material::color::generate_theme(0xffB33B15, Some(0xffB88576))
+            } else {
+                material::color::generate_theme(0xff769CDF, Some(0xff8991A2))
+            };
+            material::color::set_global_scheme(new_theme);
+            self.active_2_before = self.active_2;
+        }
     }
 }
 
@@ -101,28 +127,40 @@ fn nav_rail(
         ui.style_mut().spacing.item_spacing = Vec2::new(0., 12.);
         // ui.style_mut().spacing.indent = 0.;
         // ui.button("1111");
-        if NavRailItem::new("你的家", *active_1).ui(ui).clicked() {
+        if NavRailItem::new("白天/晚上模式", *active_1, ui.next_auto_id())
+            .ui(ui)
+            .clicked()
+        {
             *active_1 = !*active_1;
         };
-        if NavRailItem::new("你的家", *active_2).ui(ui).clicked() {
+        if NavRailItem::new("主题，切换", *active_2, ui.next_auto_id())
+            .ui(ui)
+            .clicked()
+        {
             *active_2 = !*active_2;
         };
-        if NavRailItem::new("啊啊啊啊啊啊啊啊啊啊", *active_3)
+        if NavRailItem::new("啊啊啊啊啊啊啊啊啊啊", *active_3, ui.next_auto_id())
             .ui(ui)
             .clicked()
         {
             *active_3 = !*active_3;
         };
-        if NavRailItem::new("你的家", *active_4).ui(ui).clicked() {
+        if NavRailItem::new("你的家", *active_4, ui.next_auto_id())
+            .ui(ui)
+            .clicked()
+        {
             *active_4 = !*active_4;
         };
-        if NavRailItem::new("111111111111111111", *active_5)
+        if NavRailItem::new("111111111111111111", *active_5, ui.next_auto_id())
             .ui(ui)
             .clicked()
         {
             *active_5 = !*active_5;
         };
-        if NavRailItem::new("你的家", *active_6).ui(ui).clicked() {
+        if NavRailItem::new("你的家", *active_6, ui.next_auto_id())
+            .ui(ui)
+            .clicked()
+        {
             *active_6 = !*active_6;
         };
     });
@@ -131,11 +169,16 @@ fn nav_rail(
 struct NavRailItem<'a> {
     label: &'a str,
     active: bool,
+    anim_id: Id,
 }
 
 impl<'a> NavRailItem<'a> {
-    fn new(label: &'a str, active: bool) -> Self {
-        Self { label, active }
+    fn new(label: &'a str, active: bool, anim_id: Id) -> Self {
+        Self {
+            label,
+            active,
+            anim_id,
+        }
     }
 }
 
@@ -181,26 +224,28 @@ impl<'a> egui::Widget for NavRailItem<'a> {
         let hod = response.is_pointer_button_down_on();
         let pos = response.interact_pointer_pos();
         // let clk = response.contains_pointer();
+        // ui.id
+        let active_anim = ui.animate_bool_with_time_and_easing(
+            self.anim_id,
+            self.active,
+            0.2,
+            easing::quadratic_out,
+        );
 
-        let calculated_indicator_color = {
-            // 没激活就是透明的
-            let base_color = if self.active {
-                secondary_container_color.into()
-            } else {
-                Color32::TRANSPARENT
-            };
+        let calculated_indicator_color = secondary_container_color.with_alpha_f32(active_anim);
+
+        let calculated_indicator_overlay_color = {
+            let base_color = Color32::TRANSPARENT;
             // hover 叠加层
             let mix_hover = if hov {
-                let layer: Color32 = on_surface_color.into();
-                let layer = layer.gamma_multiply_u8(layer_alpha);
+                let layer = on_surface_color.with_alpha_u8(layer_alpha);
                 base_color.blend(layer)
             } else {
                 base_color
             };
             // hold 叠加层
             let mix_hold = if hod {
-                let layer: Color32 = on_surface_color.into();
-                let layer = layer.gamma_multiply_u8(layer_alpha);
+                let layer = on_surface_color.with_alpha_u8(layer_alpha);
                 mix_hover.blend(layer)
             } else {
                 mix_hover
@@ -252,14 +297,23 @@ impl<'a> egui::Widget for NavRailItem<'a> {
             ui.fonts_mut(|f: &mut egui::epaint::FontsView<'_>| f.layout_job(label_job));
         let label_text_anchor = Pos2::new(rect.center().x, rect.bottom() - 16.);
         let painter = ui.painter();
-        let indicator_start = Pos2::new(rect.center().x - (24. / 2.) - 16., rect.top() + 4.);
-        // let indicator_start = rect.left_top() + Vec2::new(0., 4.);
-        let indicator_end = Pos2::new(rect.center().x + (24. / 2.) + 16., rect.top() + 4. + 32.);
-        // let indicator_end = rect.right_top() + Vec2::new(0., 4. + 32.);
-        let indicator_rect = Rect::from_two_pos(indicator_start, indicator_end);
-        let indicator_radius = CornerRadius::same(32 / 2);
+        let icon_center = Pos2::new(rect.center().x, rect.top() + 20.);
+        let indicator_width = {
+            let piece = 56. / 3.;
+            let anim_part = piece * active_anim;
+            anim_part + piece * 2.
+        };
+        let indicator_rect = Rect::from_center_size(icon_center, Vec2::new(indicator_width, 32.));
+        let indicator_overlay_rect = Rect::from_center_size(icon_center, Vec2::new(56., 32.));
+        let indicator_radius: CornerRadius = CornerRadius::same(32 / 2);
+
         painter.rect_filled(indicator_rect, indicator_radius, calculated_indicator_color);
-        let icon_center = Pos2::new(rect.center().x, rect.top() + 4. + (32. / 2.));
+
+        painter.rect_filled(
+            indicator_overlay_rect,
+            indicator_radius,
+            calculated_indicator_overlay_color,
+        );
 
         //    let ripple =  RippleCallback::new(indicator_rect.size(), indicator_radius, vec![
 
@@ -283,7 +337,6 @@ impl<'a> egui::Widget for NavRailItem<'a> {
         response
     }
 }
-
 
 // pub struct SurfaceCallback {
 //     size: Vec2,
