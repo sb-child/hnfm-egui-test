@@ -18,6 +18,7 @@ egui 自定义 material 3 组件测试代码，未来会移植到[另一项目](
 
 - https://m3.material.io/components
 - 还有 deepseek 陪我写
+- 部分灵感来自于 https://github.com/sb-child/egui-material3 (forked from [nikescar/egui-material3](https://github.com/nikescar/egui-material3))
 
 ## License
 
