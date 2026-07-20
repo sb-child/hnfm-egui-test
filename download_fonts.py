@@ -22,7 +22,7 @@ FONTS: list[dict] = [
     {
         "name": "MapleMonoNL-NF-CN-Regular-unhinted.ttf",
         "url": "https://github.com/subframe7536/maple-font/releases/download/v7.9/MapleMonoNL-NF-CN-unhinted.zip",
-        "zip_member": "MapleMonoNL-NF-CN-Regular-unhinted.ttf",
+        "zip_member": "MapleMonoNL-NF-CN-Regular.ttf",
     },
 ]
 

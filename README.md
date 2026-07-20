@@ -4,7 +4,7 @@ egui 自定义 material 3 组件测试代码，未来会移植到[另一项目](
 
 ![screenshot](./screenshot.png)
 
-注意字体存了 LFS
+运行 [`download_fonts.py`](./download_fonts.py) 下载字体 (没写 `build.rs`)
 
 ## todo list
 
