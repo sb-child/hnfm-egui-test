@@ -47,7 +47,7 @@ impl eframe::App for AppLayout {
             .resizable(false)
             .show(ui, bottom_statusbar);
         let my_frame = egui::containers::Frame {
-            inner_margin: egui::epaint::Margin::same(0),
+            inner_margin: egui::epaint::Margin::symmetric(0, 4),
             outer_margin: egui::epaint::Margin::same(0),
             corner_radius: egui::CornerRadius::ZERO,
             shadow: eframe::epaint::Shadow::NONE,
@@ -115,46 +115,42 @@ fn nav_rail(
     ui.set_width(96.); // Nav rail collapsed container width = 96 dp
 
     ui.vertical(|ui| {
-        ui.add_space(40.);
+        ui.add_space(44.);
         // ui.style_mut().spacing.item_spacing = Vec2::new(0., 0.);
-        ui.style_mut().spacing.item_spacing = Vec2::new(0., 12.);
+        ui.style_mut().spacing.item_spacing = Vec2::new(0., 4.);
         // ui.style_mut().spacing.indent = 0.;
         // ui.button("1111");
-        if NavRailItem::new("白天/晚上模式", *active_1, ui.next_auto_id())
+        if NavRailItem::new("theme_toggle", "白天/晚上模式", *active_1)
             .ui(ui)
             .clicked()
         {
             *active_1 = !*active_1;
         };
-        if NavRailItem::new("主题，切换", *active_2, ui.next_auto_id())
+        if NavRailItem::new("theme_switch", "主题，切换", *active_2)
             .ui(ui)
             .clicked()
         {
             *active_2 = !*active_2;
         };
-        if NavRailItem::new("toggle 啊啊啊啊啊啊啊啊啊啊", *active_3, ui.next_auto_id())
+        if NavRailItem::new("toggle_test", "toggle 啊啊啊啊啊啊啊啊啊啊", *active_3)
             .ui(ui)
             .clicked()
         {
             *active_3 = !*active_3;
         };
-        if NavRailItem::new(
-            &format!("opt={}", active_opt),
-            *active_opt == 0,
-            ui.next_auto_id(),
-        )
-        .ui(ui)
-        .clicked()
+        if NavRailItem::new("opt_0", &format!("opt={}", active_opt), *active_opt == 0)
+            .ui(ui)
+            .clicked()
         {
             *active_opt = 0;
         };
-        if NavRailItem::new("opt2", *active_opt == 1, ui.next_auto_id())
+        if NavRailItem::new("opt_1", "opt2", *active_opt == 1)
             .ui(ui)
             .clicked()
         {
             *active_opt = 1;
         };
-        if NavRailItem::new("opt3", *active_opt == 2, ui.next_auto_id())
+        if NavRailItem::new("opt_2", "opt3", *active_opt == 2)
             .ui(ui)
             .clicked()
         {
@@ -164,41 +160,62 @@ fn nav_rail(
 }
 
 struct NavRailItem<'a> {
+    key: &'a str,
     label: &'a str,
     active: bool,
-    anim_id: Id,
 }
 
 impl<'a> NavRailItem<'a> {
-    fn new(label: &'a str, active: bool, anim_id: Id) -> Self {
+    fn new(key: &'a str, label: &'a str, active: bool) -> Self {
         Self {
+            key,
             label,
             active,
-            anim_id,
         }
     }
 }
 
 impl<'a> egui::Widget for NavRailItem<'a> {
     fn ui(self, ui: &mut egui::Ui) -> egui::Response {
-        // Nav rail item icon size = 24dp
-        // Nav rail item active indicator leading/trailing space = 16dp
-        // Nav rail item vertical icon label space = 4dp
-        // Nav rail item vertical active indicator width = 56dp
-        // Nav rail item vertical active indicator height = 32dp
-        // |4dp
-        // (---16dp [24dp icon] 16dp---) (|32dp)
-        // |4dp
-        // text ... (|16dp)
-        // Nav rail item vertical label text = weight 500, 12pt, line height 16pt
-        // Nav rail item container height = 64dp
-        // Nav rail item short container height = 56dp (4+32+4+16)
         let parent_width = ui.available_width();
-        let desired_size = Vec2::new(parent_width, 56.);
-        // Sense clicks and hover
-        let (rect, response) = ui.allocate_exact_size(desired_size, Sense::click());
 
-        // let bg_color = Color32::from_rgb(29, 78, 216);
+        let active_anim = {
+            let anim_id = Id::new(self.key).with("active");
+            ui.animate_bool_with_time_and_easing(anim_id, self.active, 0.2, easing::quadratic_out)
+        };
+
+        let font_weight = 400. + 100. * active_anim;
+        let label_font_id = FontId::proportional(12.0);
+
+        let layout_label = |ui: &mut egui::Ui, color: Color32| {
+            let mut job = LayoutJob::default();
+            job.append(
+                self.label,
+                0.0,
+                TextFormat {
+                    font_id: label_font_id.clone(),
+                    color,
+                    line_height: Some(16.),
+                    coords: VariationCoords::new([(b"wght", font_weight)]),
+                    ..Default::default()
+                },
+            );
+            job.halign = egui::Align::Center;
+            job.wrap = TextWrapping {
+                max_width: parent_width,
+                max_rows: 2,
+                overflow_character: None,
+                break_anywhere: false,
+            };
+            ui.fonts_mut(|f: &mut egui::epaint::FontsView<'_>| f.layout_job(job))
+        };
+
+        let label_galley_pre = layout_label(ui, Color32::BLACK);
+        let num_rows = label_galley_pre.rows.len();
+        let container_height = if num_rows <= 1 { 56. } else { 72. };
+
+        let desired_size = Vec2::new(parent_width, container_height);
+        let (rect, response) = ui.allocate_exact_size(desired_size, Sense::click());
 
         let (
             on_surface_variant_color,
@@ -214,33 +231,22 @@ impl<'a> egui::Widget for NavRailItem<'a> {
             )
         });
 
-        // md.sys.state.hover.state-layer-opacity = 0.08
         let layer_alpha = 20u8;
 
         let hov = response.hovered();
         let hod = response.is_pointer_button_down_on();
         let pos = response.interact_pointer_pos();
-        // let clk = response.contains_pointer();
-        // ui.id
-        let active_anim = ui.animate_bool_with_time_and_easing(
-            self.anim_id,
-            self.active,
-            0.2,
-            easing::quadratic_out,
-        );
 
         let calculated_indicator_color = secondary_container_color.with_alpha_f32(active_anim);
 
         let calculated_indicator_overlay_color = {
             let base_color = Color32::TRANSPARENT;
-            // hover 叠加层
             let mix_hover = if hov {
                 let layer = on_surface_color.with_alpha_u8(layer_alpha);
                 base_color.blend(layer)
             } else {
                 base_color
             };
-            // hold 叠加层
             let mix_hold = if hod {
                 let layer = on_surface_color.with_alpha_u8(layer_alpha);
                 mix_hover.blend(layer)
@@ -251,7 +257,6 @@ impl<'a> egui::Widget for NavRailItem<'a> {
         };
 
         let calculated_label_color = {
-            // 激活和hov是同一个颜色
             let c: Color32 = if self.active || hov {
                 on_surface_color
             } else {
@@ -271,30 +276,8 @@ impl<'a> egui::Widget for NavRailItem<'a> {
             c
         };
 
-        let font_weight = 400. + 100. * active_anim;
-        let mut label_job = LayoutJob::default();
-        let label_font_id = FontId::proportional(12.0);
-        label_job.append(
-            self.label,
-            0.0,
-            TextFormat {
-                font_id: label_font_id.clone(),
-                color: calculated_label_color,
-                line_height: Some(16.),
-                coords: VariationCoords::new([(b"wght", font_weight)]),
-                ..Default::default()
-            },
-        );
-        label_job.halign = egui::Align::Center;
-        label_job.wrap = TextWrapping {
-            max_width: parent_width,
-            max_rows: 1,
-            overflow_character: Some('…'),
-            break_anywhere: true,
-        };
-        let label_galley =
-            ui.fonts_mut(|f: &mut egui::epaint::FontsView<'_>| f.layout_job(label_job));
-        let label_text_anchor = Pos2::new(rect.center().x, rect.bottom() - 16.);
+        let label_galley = layout_label(ui, calculated_label_color);
+        let label_text_anchor = Pos2::new(rect.center().x, rect.top() + 40.);
         let painter = ui.painter();
         let icon_center = Pos2::new(rect.center().x, rect.top() + 20.);
         let indicator_width = {
@@ -314,25 +297,12 @@ impl<'a> egui::Widget for NavRailItem<'a> {
             calculated_indicator_overlay_color,
         );
 
-        //    let ripple =  RippleCallback::new(indicator_rect.size(), indicator_radius, vec![
-
-        //    ]);
-        //     let ripple_cb = egui_wgpu::Callback::new_paint_callback(indicator_rect, ());\
-        // painter.add(Shape::Callback());
-
         painter.circle_stroke(
             icon_center,
             24. / 2.,
             Stroke::new(1., calculated_icon_color),
         );
         painter.galley(label_text_anchor, label_galley, calculated_label_color);
-        // debug
-        // painter.rect_stroke(
-        //     rect,
-        //     CornerRadius::ZERO,
-        //     Stroke::new(1., Color32::RED),
-        //     egui::StrokeKind::Middle,
-        // );
         response
     }
 }

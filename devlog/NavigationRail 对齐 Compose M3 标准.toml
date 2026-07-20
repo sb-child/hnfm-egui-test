@@ -1,0 +1,23 @@
+[metadata]
+title = "NavigationRail 对齐 Compose M3 标准"
+created_at = "2026-07-20 16:38:53 UTC+8"
+modified_at = "2026-07-20 17:31:39 UTC+8"
+
+[[sections]]
+number = "1"
+title = "初始对齐实现"
+created_at = "2026-07-20 16:38:53 UTC+8"
+modified_at = "2026-07-20 16:38:53 UTC+8"
+content = "对照 Android Compose M3 `NavigationRail.kt` 源码和 token 定义，将 NavigationRail 实现对齐 M3 标准。\n\n## 变更内容\n\n### 1. Panel Frame 内边距 (line 51)\n- `inner_margin: Margin::same(0)` → `Margin::symmetric(0, 4)`\n- 对应 Compose `NavigationRail` Column 的 `padding(vertical = 4.dp)`\n\n### 2. nav_rail 函数 (lines 118, 120)\n- 顶部空间: `ui.add_space(40.)` → `ui.add_space(44.)` 对应 `TopSpace = 44.dp`\n- item 间距: `item_spacing.y = 12.` → `4.` 对应 `ItemVerticalSpace = 4.dp`\n\n### 3. NavRailItem Widget\n- **TextWrapping**: `max_rows: 1, overflow_character: Some('…'), break_anywhere: true` → `max_rows: 2, overflow_character: None, break_anywhere: false`（按单词/连字符断行）\n- **动态容器高度**: 先 layout label 确定行数，1行用 56dp，2行用 72dp（对应 Compose `placeLabelAndIcon` 的 contentHeight 计算）\n- **label 锚点**: `rect.bottom() - 16.` → `rect.top() + 40.`（4dp top + 32dp indicator + 4dp gap，不随容器高度变化）\n- **两遍 layout**: 第一遍用 dummy 颜色获取高度，alloc rect 后再用真实颜色 layout（因颜色依赖 response 的 hov 状态）\n\n### 参考数据\n| Token | 值 |\n|-------|-----|\n| ContainerWidth | 96dp |\n| NarrowContainerWidth | 80dp |\n| TopSpace | 44dp |\n| ItemVerticalSpace | 4dp |\n| ActiveIndicatorWidth | 56dp |\n| ActiveIndicatorHeight | 32dp |\n| IconLabelSpace | 4dp |\n| NavigationRailVerticalPadding | 4dp |"
+desc = "对齐 M3 标准的 NavigationRail 实现变更"
+
+[[sections]]
+number = "2"
+title = "动画 id 重构：从外部 Id 改为内部 push_id"
+created_at = "2026-07-20 17:31:39 UTC+8"
+modified_at = "2026-07-20 17:31:39 UTC+8"
+content = "将 NavRailItem 的动画 id 管理从外部传入 `ui.next_auto_id()` 改为内部用 `ui.push_id(self.key, |ui| { ... })` 派生。\n\n变更：\n- `NavRailItem` 新增 `key: &'a str` 字段，移除 `anim_id: Id`\n- `NavRailItem::new(key, label, active)` 调用侧传入稳定字符串 key（如 \"theme_toggle\", \"opt_0\"）\n- `ui()` 内部用 `ui.push_id(self.key, |ui| { ... })` 创建作用域，`ui.id().with(\"active\")` 派生动画 id\n- key 稳定 → 动画 id 稳定，不受列表插入/删除影响\n- 从 egui imports 中移除不再需要的 `Id`\n"
+desc = "用 push_id + stable key 替代外部传入的 ui.next_auto_id() 管理动画 id"
+
+[todo]
+items = []
