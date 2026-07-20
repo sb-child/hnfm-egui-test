@@ -1,0 +1,15 @@
+[metadata]
+title = "字体下载脚本"
+created_at = "2026-07-21 02:11:33 UTC+8"
+modified_at = "2026-07-21 02:11:33 UTC+8"
+
+[[sections]]
+number = "1"
+title = "download_fonts.py 实现"
+created_at = "2026-07-21 02:11:33 UTC+8"
+modified_at = "2026-07-21 02:11:33 UTC+8"
+content = "项目使用 3 个外部字体（SourceHanSansSC-VF.otf、SourceHanSerifSC-VF.otf、MapleMonoNL-NF-CN-Regular-unhinted.ttf），这些字体文件体积较大不适合纳入 git。\n\n创建 `download_fonts.py`：\n- 使用 `requests` 库（流式下载，带进度条）\n- 前两个思源字体直接从 GitHub raw URL 下载\n- Maple Mono 字体从 release zip 下载，用 zipfile + BytesIO 内存解压，只提取目标 ttf\n- 目标路径 `src/fonts/`，自动创建目录\n- 错误时 exit(1) 并打印错误信息"
+desc = "用 Python + requests 实现字体下载脚本，支持直接下载 OTF 和从 zip 提取 TTF"
+
+[todo]
+items = []
