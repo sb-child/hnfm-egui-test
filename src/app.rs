@@ -17,9 +17,7 @@ pub struct AppLayout {
     active_2: bool,
     active_2_before: bool,
     active_3: bool,
-    active_4: bool,
-    active_5: bool,
-    active_6: bool,
+    active_opt: u8,
 }
 
 impl AppLayout {
@@ -36,9 +34,7 @@ impl AppLayout {
             active_2: false,
             active_2_before: false,
             active_3: false,
-            active_4: false,
-            active_5: false,
-            active_6: false,
+            active_opt: 0,
         }
     }
 }
@@ -66,9 +62,7 @@ impl eframe::App for AppLayout {
                     &mut self.active_1,
                     &mut self.active_2,
                     &mut self.active_3,
-                    &mut self.active_4,
-                    &mut self.active_5,
-                    &mut self.active_6,
+                    &mut self.active_opt,
                 )
             });
         egui::Panel::left("sidebar")
@@ -114,9 +108,7 @@ fn nav_rail(
     active_1: &mut bool,
     active_2: &mut bool,
     active_3: &mut bool,
-    active_4: &mut bool,
-    active_5: &mut bool,
-    active_6: &mut bool,
+    active_opt: &mut u8,
 ) {
     // https://m3.material.io/components/navigation-rail/specs
     ui.set_width(96.); // Nav rail collapsed container width = 96 dp
@@ -139,29 +131,33 @@ fn nav_rail(
         {
             *active_2 = !*active_2;
         };
-        if NavRailItem::new("啊啊啊啊啊啊啊啊啊啊", *active_3, ui.next_auto_id())
+        if NavRailItem::new("toggle 啊啊啊啊啊啊啊啊啊啊", *active_3, ui.next_auto_id())
             .ui(ui)
             .clicked()
         {
             *active_3 = !*active_3;
         };
-        if NavRailItem::new("你的家", *active_4, ui.next_auto_id())
-            .ui(ui)
-            .clicked()
+        if NavRailItem::new(
+            &format!("opt={}", active_opt),
+            *active_opt == 0,
+            ui.next_auto_id(),
+        )
+        .ui(ui)
+        .clicked()
         {
-            *active_4 = !*active_4;
+            *active_opt = 0;
         };
-        if NavRailItem::new("111111111111111111", *active_5, ui.next_auto_id())
+        if NavRailItem::new("opt2", *active_opt == 1, ui.next_auto_id())
             .ui(ui)
             .clicked()
         {
-            *active_5 = !*active_5;
+            *active_opt = 1;
         };
-        if NavRailItem::new("你的家", *active_6, ui.next_auto_id())
+        if NavRailItem::new("opt3", *active_opt == 2, ui.next_auto_id())
             .ui(ui)
             .clicked()
         {
-            *active_6 = !*active_6;
+            *active_opt = 2;
         };
     });
 }
