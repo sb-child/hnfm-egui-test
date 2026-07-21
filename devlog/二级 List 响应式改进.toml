@@ -1,0 +1,89 @@
+[metadata]
+title = "二级 List 响应式改进"
+created_at = "2026-07-21 21:37:59 UTC+8"
+modified_at = "2026-07-22 03:24:23 UTC+8"
+
+[[sections]]
+number = "1"
+title = "P1+P2 实现计划"
+created_at = "2026-07-21 21:37:59 UTC+8"
+modified_at = "2026-07-21 21:37:59 UTC+8"
+content = "## 总体方案\n\n采用纯声明式 enum 状态机 `SidebarMode { Hidden, Flyout(RailId), Pinned(RailId), Modal(RailId) }`，响应式三阶梯（Wide>=1000 / Medium 600~1000 / Narrow<600）自动选择默认模式，用户可通过 Header Pin 按钮覆盖。\n\n## P1: 状态机 + Pin/Flyout + 180ms 防抖 + 视觉区分\n\n- SidebarState 存于 AppLayout\n- Wide 进应用默认 Pinned{rail_default}\n- Medium/Narrow 起手 Hidden\n- Rail hover + 180ms 防抖 → 触发 Flyout 或 Hover Preview\n- Pinned: Panel::left 扁平无阴影、无圆角\n- Flyout/Modal: Area Order::Foreground 悬浮，阴影 blur24 α0.4、大圆角 (0,12,12,0)\n- Modal: 附加 scrim 全屏半透明遮罩 + Esc/点遮罩关闭\n- Header Pin 按钮：toggle Pinned ↔ 当前响应式默认\n- 图标统一用 circle_stroke 圆圈占位（pinned/unpinned 用填充态区分）\n\n## P2: 响应式三阶默认 + Modal + Hover Preview 覆盖层\n\n- 每帧根据 screen_rect().width() 判断阈值\n- 跨阈值仅在 auto 状态 (!is_user_pinned) 下改模式\n- Pinned(rail_a) 时 hover rail_b（≠a）→ 在 Order::Foreground 同位遮盖 Pinned panel 的 Hover Preview\n- Preview 内点子项 → 切换 pinned_rail；点 Pin → 切换 pinned_rail + 保持 Pinned\n\n## 关键技术数值\n\n- 防抖延迟: 180ms\n- 动画时长: 200ms, easing quadratic_out\n- 阈值: Wide >=1000, Medium 600~1000, Narrow <600\n- Pinned 宽度: 300 (本轮固定，P3 自画 Splitter)\n- Flyout/Modal 圆角: nw:0 ne:12 sw:0 se:12\n- Flyout 阴影: offset(8,0) blur24 α0.4\n- Modal scrim: scheme.scrim α0.5\n- Hover Preview 淡入: 150ms\n\n## 组件拆分\n\nmaterial/ 下新建 util.rs, list_item.rs, nav_rail_item.rs, icon_button.rs, ripple.rs\n新建 sidebar.rs 放状态机\napp.rs 瘦身为骨架 + demo 面板\n\n## 新增 demo rail\n\nFiles / Projects / Settings / Help 四个板块，保留现有 6 个 rail（theme_toggle 等）不动"
+desc = "基于 feedback.md 讨论的二级 List 响应式改进：Pinned/Flyout/Modal 三态模型 + 180ms Hover 防抖 + 响应式三阶梯切换 + Hover Preview 覆盖层。计划分拆分期（纯结构迁移）和 P1+P2 实施两阶段"
+
+[[sections]]
+number = "2"
+title = "拆分期完成（纯结构迁移，行为零变更）"
+created_at = "2026-07-21 21:54:18 UTC+8"
+modified_at = "2026-07-21 21:54:18 UTC+8"
+content = "## 新文件\n\n- src/material/util.rs: lerp_corner_radius + lerp_f32\n- src/material/list_item.rs: 迁自 app.rs： ListItem struct + Widget impl\n- src/material/nav_rail_item.rs: 迁自 app.rs： NavRailItem struct + Widget impl\n- src/material/icon_button.rs: IconButton 占位（函签名 + todo，P1 填充）\n- src/material/ripple.rs: 迁自 app.rs： RippleCallback 空壳 + #[allow(dead_code)]\n- src/sidebar.rs: 状态机骨架（SidebarState/RailId/SidebarMode + 分身函数 todo）\n\n## 修改文件\n\n- src/app.rs: NavRailItem/ListItem/RippleCallback/lerp_corner_radius 迁出；imports 精简 ；Widget trait 保留 scope（Widget::ui 调用链）\n- src/material/mod.rs: +pub mod util/list_item/nav_rail_item/icon_button/ripple；+pub use ListItem/NavRailItem\n- src/lib.rs: +pub mod sidebar\n\n## 编译\n\ncargo check 零 warnings pass"
+desc = "8 步纯结构迁移，将 ListItem/NavRailItem/RippleCallback + lerp 工具函数迁到 material/ 下独立文件，新建 sidebar.rs 状态机骨架，app.rs 从 796→360 行。编译零警告。"
+related_todos = [
+    "P1: 状态机 SidebarState + Pin/Flyout 切换 + 180ms 防抖 + 视觉区分",
+]
+
+[[sections]]
+number = "3"
+title = "P1+P2 实施完成"
+created_at = "2026-07-21 22:08:42 UTC+8"
+modified_at = "2026-07-21 22:08:42 UTC+8"
+content = "## 已实现功能\n\n### 状态机 SidebarState\n- `RailId`: Files / Projects / Settings / Help 四个 demo 板块\n- `SidebarMode`: Hidden / Flyout(rail) / Pinned(rail) / Modal(rail)\n- `SidebarState`: mode + pinned_rail + hover_rail + hover_since + is_user_pinned + preview_active\n\n### 交互\n- **180ms Hover 防抖**: Rail 悬停超 180ms → 根据屏幕宽度触发 Flyout（Medium）或 Pinned（Wide）\n- **Rail 点击**: Wide→Pin, Medium→Flyout, Narrow→Modal；已 Pin 时点同 rail 取消 Pin\n- **Pin 按钮**: sidebar Header 右上角 IconButton(toggle 型)，圆圈占位（实心=pinned，空心=unpinned）。Pin→固化为 Pinned(rail)，Unpin→Hidden\n- **Hover Preview**: Pinned(rail_a) 时 hover rail_b → 在 Foreground 层同位遮盖 Pinned panel 的 Preview 浮层，移开即消失\n- **Flyout 关闭**: pointer 离开 rail + flyout rect → 关闭\n- **Modal 关闭**: Esc 键。scrim 全屏半透明绘制（不交互，因 egui 0.35 限制）\n\n### 响应式\n- Wide(>=1000): 默认 Pinned\n- Medium(600~1000): 默认 Hidden + Flyout(Hover)\n- Narrow(<600): 默认 Hidden + Modal(Click)\n- 用户 Pin/Unpin 后设置 is_user_pinned，跨阈值不自动切换\n- Narrow 下 Hover 也出 Flyout（而非 Modal），仅点击出 Modal\n\n### 视觉\n- Pinned: 扁平 Panel，无阴影无圆角，fill=surface\n- Flyout/Modal: Area Foreground + Shadow(offset:8,blur:24,a:0.4) + CornerRadius(nw:0,ne:12,sw:0,se:12) + fill=surface_container_high\n- Modal scrim: scheme.scrim α0.5 全屏半透明\n\n### 文件改动\n- src/material/icon_button.rs: IconButton toggle 型组件（48x48→24尺寸配置，圆圈占位图标，state layer）\n- src/sidebar.rs: 完整状态机 + sidebar_body（Header+Pin+ListItem按板块分发）+ render_overlays (Flyout/Modal/Preview)\n- src/app.rs: AppLayout 接入 SidebarState；nav_rail 新增 4 个 demo rail + hover/click 追踪；条件式 Pinned Panel + overlay 在 CentralPanel 之后渲染\n\n### 已知限制\n- 不同 rail 的 segmented 选择状态共用 list_sel_seg_0/1/2（demo 阶段）\n- scrim 点击关闭模态暂未实现（egui 0.35 ctx.interact API 不存在）\n- Pinned panel 宽度固定 300px"
+desc = "实现二级 List 的 Pinned/Flyout/Modal 三态模型 + Header Pin 按钮 + 180ms Hover 防抖 + 响应式三阶默认 + Hover Preview 覆盖层 + IconButton 组件"
+
+[[sections]]
+number = "4"
+title = "修复：Flyout Area 被 content_rect 约束推出可见区域"
+created_at = "2026-07-22 03:18:12 UTC+8"
+modified_at = "2026-07-22 03:18:12 UTC+8"
+content = "## 根因\n\negui 0.35 `Area::show()` 内部逻辑：\n- 默认 `constrain = true`，constrain_rect 取 `ctx.content_rect()`\n- `ctx.content_rect()` 返回 CentralPanel 可用区域（减去所有 Panel 后的剩余空间），不是屏幕尺寸\n- 渲染后：`size = size.at_most(constrain_rect.size())` — 尺寸被 clamp\n- `state.rect = ...align_size_within_rect(size, constrain_rect)` — 位置被约束到 content_rect 内\n\nFlyout 宽度 300px + margin > content_rect 宽度时，每帧被重新定位，推出可见区域。\n\n## 修复\n\nrender_single_overlay (line 619) 和 scrim Area (line 561) 的 `egui::Area::new(...)` 均加 `.constrain(false)`。"
+desc = "egui 0.35 Area 默认 constrain=true，导致 Flyout 渲染后被 ctx.content_rect() 约束重新定位到可见区域外。fix: Area::constrain(false)。"
+
+[[sections]]
+number = "5"
+title = "撤回 P1+P2 至拆分期"
+created_at = "2026-07-22 03:24:06 UTC+8"
+modified_at = "2026-07-22 03:24:06 UTC+8"
+content = "## 撤回原因\n\n1. Flyout Area 被 egui 0.35 默认 `constrain=true` 推出可见区域\n2. `.constrain(false)` 修复后整体交互仍不稳定\n3. seg_list 借用问题、demo 面板状态共享等次级问题堆积\n\n## 撤回后状态\n\n- src/sidebar.rs: 骨架（RailId/SidebarMode/SidebarState 定义 + todo!() 占位）\n- src/app.rs: 恢复为拆分后版本（旧 sidebar() 函数、无 SidebarState、无新 rail）\n- src/material/: 全部组件保留不动（util/list_item/nav_rail_item/icon_button/ripple）\n- cargo check 零警告\n\n## 保留的成果\n\n- material/ 组件拆分明细完整保留，移植 HoshinekoFM 可用\n- sidebar.rs 骨架枚举/结构体定义可供后续参考"
+desc = "P1+P2 实现存在多处逻辑错误（Flyout 被 content_rect 推出、seg_list 借用问题等），整体撤回至拆分期后状态。sidebar.rs 恢复为骨架（todo），app.rs 恢复为旧 sidebar 函数。material/ 组件拆分保留不动。"
+
+[[todo.items]]
+text = "组件拆分：material/{util,list_item,nav_rail_item,icon_button,ripple}.rs + sidebar.rs + app.rs 瘦身"
+completed = true
+related_sections = [
+    "1",
+]
+
+[[todo.items]]
+text = "P3: 自画 Splitter 拖拽调宽 + 双击折叠（本轮暂缓）"
+completed = false
+related_sections = [
+    "1",
+]
+
+[[todo.items]]
+text = "P4: Breadcrumb 入口 + 过渡动画细化（本轮暂缓）"
+completed = false
+related_sections = [
+    "1",
+]
+
+[[todo.items]]
+text = "P1 重来：基于 egui 0.35 Area 约束机制重新设计 Flyout 渲染方案"
+completed = false
+related_sections = [
+    "4",
+]
+
+[[todo.items]]
+text = "P1: 状态机 SidebarState + Pin/Flyout 切换 + 180ms 防抖 + 视觉区分（重来）"
+completed = false
+related_sections = [
+    "5",
+]
+
+[[todo.items]]
+text = "P2: 响应式三阶默认 + Modal + Hover Preview（重来）"
+completed = false
+related_sections = [
+    "5",
+]
