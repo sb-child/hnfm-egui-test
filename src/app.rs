@@ -58,9 +58,7 @@ impl AppLayout {
 impl eframe::App for AppLayout {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let surface_color = material::color::access(|_p, s| s.surface).into();
-        egui::Panel::bottom("bottom-statusbar")
-            .resizable(false)
-            .show(ui, bottom_statusbar);
+        // surface背景
         let surface_frame = egui::containers::Frame {
             inner_margin: egui::epaint::Margin::symmetric(0, 4),
             outer_margin: egui::epaint::Margin::same(0),
@@ -69,6 +67,11 @@ impl eframe::App for AppLayout {
             fill: surface_color,
             stroke: Stroke::NONE,
         };
+        // 状态栏
+        egui::Panel::bottom("bottom-statusbar")
+            .resizable(false)
+            .show(ui, bottom_statusbar);
+        // 导航栏
         egui::Panel::left("navigation-rail")
             .frame(surface_frame)
             .resizable(false)
@@ -82,6 +85,7 @@ impl eframe::App for AppLayout {
                     &mut self.active_opt,
                 )
             });
+        // 二级列表
         egui::Panel::left("sidebar")
             .frame(surface_frame)
             .resizable(false)
@@ -95,13 +99,17 @@ impl eframe::App for AppLayout {
                     &mut self.list_sel_seg_2,
                 )
             });
+        // 标签页栏
         egui::Panel::top("tabs").resizable(false).show(ui, tabs);
+        // 终端
         egui::Panel::bottom("terminal-tab")
             .resizable(true)
             .default_size(200.0)
             .size_range(60.0..=600.0)
             .show_collapsible(ui, &mut self.terminal_expanded, terminal);
+        // 内容区
         egui::CentralPanel::default().show(ui, content);
+        // 主题
         if self.active_1 != self.active_1_before {
             let new_theme_mode = if self.active_1 {
                 material::color::ThemeMode::Light
