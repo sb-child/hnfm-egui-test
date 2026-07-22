@@ -66,11 +66,9 @@ impl eframe::App for AppLayout {
             .resizable(false)
             .show(ui, bottom_statusbar);
         // 屏幕宽度（导航栏和侧边栏共用）
-        let screen_width = ui.ctx().input(|i| {
-            i.raw.screen_rect
-                .map(|r| r.width())
-                .unwrap_or(800.0)
-        });
+        let screen_width = ui
+            .ctx()
+            .input(|i| i.raw.screen_rect.map(|r| r.width()).unwrap_or(800.0));
         // 导航栏
         egui::Panel::left("navigation-rail")
             .frame(surface_frame)
@@ -227,7 +225,12 @@ fn nav_rail(
     });
 }
 
-fn sidebar_button(ui: &mut egui::Ui, state: &mut sidebar::SidebarState, rail: RailId, screen_width: f32) {
+fn sidebar_button(
+    ui: &mut egui::Ui,
+    state: &mut sidebar::SidebarState,
+    rail: RailId,
+    screen_width: f32,
+) {
     let active = state.mode.rail() == Some(rail);
     if NavRailItem::new(
         format!("sidebar_btn_{:?}", rail).as_str(),
@@ -240,8 +243,6 @@ fn sidebar_button(ui: &mut egui::Ui, state: &mut sidebar::SidebarState, rail: Ra
         sidebar::rail_click(state, rail, screen_width);
     }
 }
-
-
 
 fn tabs(ui: &mut egui::Ui) {
     ui.vertical(|ui| {
