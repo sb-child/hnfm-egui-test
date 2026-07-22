@@ -4,10 +4,7 @@
 //! 图标统一用 circle_stroke / circle_filled 圆圈占位（与 NavRailItem/ListItem 风格一致）。
 //! 参考 https://m3.material.io/components/icon-button/specs
 
-use egui::{
-    Color32, Id, Sense, Stroke, Vec2,
-    emath::easing,
-};
+use egui::{Color32, Id, Sense, Stroke, Vec2, emath::easing};
 
 use crate::material;
 

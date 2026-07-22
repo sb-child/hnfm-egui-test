@@ -146,13 +146,17 @@ pub fn update_hover(
     now: Instant,
     screen_width: f32,
 ) {
-    todo!("P1: 校验 hover_rail 切换时刻清零 hover_since；超过 180ms 后切换 mode 到 Flyout 或生成 Preview")
+    todo!(
+        "P1: 校验 hover_rail 切换时刻清零 hover_since；超过 180ms 后切换 mode 到 Flyout 或生成 Preview"
+    )
 }
 
 /// Rail 点击触发的模式切换。
 #[allow(unused_variables)]
 pub fn rail_click(state: &mut SidebarState, rail: RailId, screen_width: f32) {
-    todo!("P1: Hidden 点击 -> Pinned(Wide) / Flyout(Medium) / Modal(Narrow)；Pinned(r) 点击 r -> Hidden；Pinned(a) 点击 b -> 切 pinned_rail=b（覆盖预览态）")
+    todo!(
+        "P1: Hidden 点击 -> Pinned(Wide) / Flyout(Medium) / Modal(Narrow)；Pinned(r) 点击 r -> Hidden；Pinned(a) 点击 b -> 切 pinned_rail=b（覆盖预览态）"
+    )
 }
 
 /// 渲染分发：根据 state.mode 调度 Pinned Panel / Flyout Area / Modal Area+scrim。
@@ -165,7 +169,9 @@ pub fn render(
     list_sel_seg_1: &mut bool,
     list_sel_seg_2: &mut bool,
 ) {
-    todo!("P1+P2: 根据 mode 分发到 render_pinned_panel / render_flyout_area / render_modal / 不渲染")
+    todo!(
+        "P1+P2: 根据 mode 分发到 render_pinned_panel / render_flyout_area / render_modal / 不渲染"
+    )
 }
 
 /// 自动应用响应式默认（每帧调用，跨阈值仅在 auto 状态下改模式）。

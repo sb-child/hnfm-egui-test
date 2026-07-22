@@ -2,8 +2,7 @@ use egui::{RichText, Stroke, Vec2, Widget};
 
 use crate::material::color::ThemeVariant;
 use crate::{
-    fonts,
-    material,
+    fonts, material,
     material::{ListItem, NavRailItem},
 };
 

@@ -5,11 +5,13 @@
 
 use egui::{
     Color32, CornerRadius, FontId, Id, Pos2, Sense, Stroke, TextFormat, Vec2,
-    emath::easing, epaint::text::VariationCoords, text::{LayoutJob, TextWrapping},
+    emath::easing,
+    epaint::text::VariationCoords,
+    text::{LayoutJob, TextWrapping},
 };
 
-use crate::material;
 use crate::fonts::ff_sans;
+use crate::material;
 
 pub struct ListItem<'a> {
     key: &'a str,
