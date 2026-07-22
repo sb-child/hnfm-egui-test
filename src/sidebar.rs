@@ -16,6 +16,13 @@ use std::time::Instant;
 use crate::material::ListItem;
 use egui::Widget;
 
+/// Flyout 触发方式：Click 触发不自动关，Hover 触发离开即关。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FlyoutTrigger {
+    Click,
+    Hover,
+}
+
 /// 应用中的板块 id（demo 板块）。
 /// 现有 NavRail 测试态（theme_toggle/theme_switch/opt_* 等）保留不动，
 /// 此处仅描述 4 个新的二级 List demo 板块。
@@ -80,9 +87,9 @@ pub const HOVER_DELAY_MS: u64 = 180;
 
 /// Hover 防抖判定：是否触发 Flyout / Preview。
 #[allow(dead_code)]
-fn hover_exceeded(since: Option<Instant>) -> bool {
+fn hover_exceeded(since: Option<Instant>, delay_ms: u64) -> bool {
     match since {
-        Some(t) => t.elapsed().as_millis() as u64 >= HOVER_DELAY_MS,
+        Some(t) => t.elapsed().as_millis() as u64 >= delay_ms,
         None => false,
     }
 }
@@ -105,6 +112,8 @@ pub struct SidebarState {
     pub preview_fade: f32,
     /// 外部请求关闭 overlay（未来 ListItem 点击时设为 true）。
     pub close_requested: bool,
+    /// Flyout 触发方式（Click 不自动关，Hover 离开即关）。
+    pub flyout_trigger: Option<FlyoutTrigger>,
 }
 
 impl SidebarState {
@@ -118,6 +127,7 @@ impl SidebarState {
             hover_since: None,
             preview_fade: 0.0,
             close_requested: false,
+            flyout_trigger: None,
         }
     }
 }
@@ -131,33 +141,33 @@ pub fn responsive_default(rail: RailId, screen_width: f32) -> SidebarMode {
     }
 }
 
-/// 由 Rail hover 触发的状态更新（180ms 防抖）。
-/// 返回是否需要切换模式（由调用者根据响应式默认再决定 Flyout / Modal）。
+/// Hover 防抖状态更新：180ms(>=600) / 300ms(<600) 延迟后触发 Flyout。
+/// 离开 rail 不清除 flyout——check_flyout_leave 负责判断鼠标是否完全离开联合区域。
 pub fn update_hover(
     state: &mut SidebarState,
     hovered_rail: Option<RailId>,
     now: Instant,
     screen_width: f32,
 ) {
-    // 基础版本：暂不实现防抖，直接更新hover状态
-    // 后续步骤5会实现完整的180ms防抖逻辑
-    state.hover_rail = hovered_rail;
-    state.hover_since = if hovered_rail.is_some() {
-        Some(now)
+    let delay_ms = if screen_width < MEDIUM_MIN {
+        300
     } else {
-        None
+        HOVER_DELAY_MS
     };
 
-    // 基础版本：hover时直接切换到Flyout模式（仅在Medium屏幕）
-    // 后续会完善为防抖后的逻辑
+    if hovered_rail != state.hover_rail {
+        state.hover_rail = hovered_rail;
+        state.hover_since = hovered_rail.map(|_| now);
+    }
+
     if let Some(rail) = hovered_rail {
-        if screen_width < WIDE_MIN && screen_width >= MEDIUM_MIN {
-            // Medium屏幕：hover触发Flyout
+        if hover_exceeded(state.hover_since, delay_ms)
+            && screen_width < WIDE_MIN
+            && !matches!(state.mode, SidebarMode::Pinned(_))
+        {
             state.mode = SidebarMode::Flyout(rail);
+            state.flyout_trigger = Some(FlyoutTrigger::Hover);
         }
-    } else if state.mode.is_overlay() {
-        // 鼠标离开且当前是Flyout模式，隐藏
-        state.mode = SidebarMode::Hidden;
     }
 }
 
@@ -165,35 +175,31 @@ pub fn update_hover(
 pub fn rail_click(state: &mut SidebarState, rail: RailId, screen_width: f32) {
     match state.mode {
         SidebarMode::Hidden => {
-            // Hidden状态：根据屏幕宽度选择模式
             if screen_width >= WIDE_MIN {
-                // Wide屏幕：切换到Pinned模式
                 state.mode = SidebarMode::Pinned(rail);
                 state.pinned_rail = rail;
             } else {
-                // Medium/Narrow屏幕：切换到Flyout模式
                 state.mode = SidebarMode::Flyout(rail);
                 state.pinned_rail = rail;
+                state.flyout_trigger = Some(FlyoutTrigger::Click);
             }
         }
         SidebarMode::Pinned(current_rail) => {
             if current_rail == rail {
-                // 点击当前rail：隐藏
                 state.mode = SidebarMode::Hidden;
             } else {
-                // 点击其他rail：切换pinned_rail
                 state.pinned_rail = rail;
                 state.mode = SidebarMode::Pinned(rail);
             }
         }
         SidebarMode::Flyout(current_rail) => {
             if current_rail == rail {
-                // 点击当前rail：隐藏Flyout
                 state.mode = SidebarMode::Hidden;
+                state.flyout_trigger = None;
             } else {
-                // 点击其他rail：切换到该rail的Flyout
                 state.pinned_rail = rail;
                 state.mode = SidebarMode::Flyout(rail);
+                state.flyout_trigger = Some(FlyoutTrigger::Click);
             }
         }
     }
@@ -238,6 +244,7 @@ pub fn render_overlays(
                         .clicked()
                     {
                         state.mode = SidebarMode::Hidden;
+                        state.flyout_trigger = None;
                     }
                 });
             });
@@ -456,6 +463,29 @@ pub fn handle_input(ctx: &egui::Context, state: &mut SidebarState) {
         if state.close_requested || ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
             state.mode = SidebarMode::Hidden;
             state.close_requested = false;
+            state.flyout_trigger = None;
+        }
+    }
+}
+
+/// Hover 触发的 Flyout 离开联合区域（rail + flyout）时自动关闭。
+/// Click 触发的 Flyout 不在此处关闭（由 Esc/scrim/close_requested 关闭）。
+pub fn check_flyout_leave(ctx: &egui::Context, state: &mut SidebarState, content_rect: egui::Rect) {
+    if !state.mode.is_overlay() || state.flyout_trigger != Some(FlyoutTrigger::Hover) {
+        return;
+    }
+    if let Some(pos) = ctx.pointer_latest_pos() {
+        let rail_rect = egui::Rect::from_min_max(
+            egui::pos2(0.0, content_rect.top()),
+            egui::pos2(96.0, content_rect.bottom()),
+        );
+        let flyout_rect = egui::Rect::from_min_max(
+            egui::pos2(96.0, content_rect.top()),
+            egui::pos2(396.0, content_rect.bottom()),
+        );
+        if !rail_rect.contains(pos) && !flyout_rect.contains(pos) {
+            state.mode = SidebarMode::Hidden;
+            state.flyout_trigger = None;
         }
     }
 }

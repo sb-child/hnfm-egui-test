@@ -119,6 +119,7 @@ impl eframe::App for AppLayout {
             &mut self.list_sel_seg_1,
             &mut self.list_sel_seg_2,
         );
+        sidebar::check_flyout_leave(ui.ctx(), &mut self.sidebar_state, content_rect);
         // 标签页栏
         egui::Panel::top("tabs").resizable(false).show(ui, tabs);
         // 终端
@@ -219,10 +220,25 @@ fn nav_rail(
         ui.separator();
 
         ui.style_mut().spacing.item_spacing = Vec2::new(0., 4.);
-        sidebar_button(ui, sidebar_state, RailId::Files, screen_width);
-        sidebar_button(ui, sidebar_state, RailId::Projects, screen_width);
-        sidebar_button(ui, sidebar_state, RailId::Settings, screen_width);
-        sidebar_button(ui, sidebar_state, RailId::Help, screen_width);
+        let mut hovered_rail = None;
+        if sidebar_button(ui, sidebar_state, RailId::Files, screen_width) {
+            hovered_rail = Some(RailId::Files);
+        }
+        if sidebar_button(ui, sidebar_state, RailId::Projects, screen_width) {
+            hovered_rail = Some(RailId::Projects);
+        }
+        if sidebar_button(ui, sidebar_state, RailId::Settings, screen_width) {
+            hovered_rail = Some(RailId::Settings);
+        }
+        if sidebar_button(ui, sidebar_state, RailId::Help, screen_width) {
+            hovered_rail = Some(RailId::Help);
+        }
+        sidebar::update_hover(
+            sidebar_state,
+            hovered_rail,
+            std::time::Instant::now(),
+            screen_width,
+        );
     });
 }
 
@@ -231,18 +247,18 @@ fn sidebar_button(
     state: &mut sidebar::SidebarState,
     rail: RailId,
     screen_width: f32,
-) {
+) -> bool {
     let active = state.mode.rail() == Some(rail);
-    if NavRailItem::new(
+    let resp = NavRailItem::new(
         format!("sidebar_btn_{:?}", rail).as_str(),
         rail.title(),
         active,
     )
-    .ui(ui)
-    .clicked()
-    {
+    .ui(ui);
+    if resp.clicked() {
         sidebar::rail_click(state, rail, screen_width);
     }
+    resp.hovered()
 }
 
 fn tabs(ui: &mut egui::Ui) {
