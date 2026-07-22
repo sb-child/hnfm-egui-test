@@ -196,17 +196,15 @@ impl<'a> egui::Widget for ListItem<'a> {
             se: bot_r,
         };
 
-        let use_segmented = self.segmented && !self.active && !hov;
-        let seg_mode_anim = ui.animate_bool_with_time_and_easing(
-            Id::new(self.key).with("seg-shape"),
-            use_segmented,
-            0.2,
-            easing::quadratic_out,
-        );
+        let seg_mode_anim = if self.segmented {
+            1.0 - active_anim.max(hover_anim)
+        } else {
+            0.0
+        };
 
         let interaction_corner = CornerRadius::same(interaction_r);
         let corner_radius =
-            material::util::lerp_corner_radius(interaction_corner, seg_corner, seg_mode_anim);
+            material::util::blend_corner_radius(interaction_corner, seg_corner, seg_mode_anim);
 
         let painter = ui.painter();
         painter.rect_filled(rect, corner_radius, container_fill);

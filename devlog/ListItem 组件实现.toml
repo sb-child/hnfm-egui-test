@@ -1,7 +1,7 @@
 [metadata]
 title = "ListItem 组件实现"
 created_at = "2026-07-20 22:36:25 UTC+8"
-modified_at = "2026-07-21 00:41:56 UTC+8"
+modified_at = "2026-07-23 02:37:01 UTC+8"
 
 [[sections]]
 number = "1"
@@ -26,6 +26,22 @@ created_at = "2026-07-21 00:41:56 UTC+8"
 modified_at = "2026-07-21 00:41:56 UTC+8"
 content = ""
 desc = "NavRailItem 和 ListItem 中的文本从双重 layout_job（一次用 BLACK 测高，一次用目标色绘制）改为单次布局（PLACEHOLDER），painter.galley 的 fallback_color 自动替换颜色，省去每个文本一次 text shaping + mesh tessellation"
+
+[[sections]]
+number = "4"
+title = "seg-shape 动画消除：从独立动画改为由 active/hover 动画派发"
+created_at = "2026-07-23 02:27:31 UTC+8"
+modified_at = "2026-07-23 02:27:31 UTC+8"
+content = "## 问题\n\n`use_segmented` 基于瞬时 raw bool（`self.active`/`hov`），而 `interaction_r` 和颜色基于动画值（`active_anim`/`hover_anim`）。虽然两者都是同一帧触发、相同时长(0.2s)、相同 easing(quadratic_out)，但它们是两个独立动画系统用不同输入做决策，存在概念上的边界条件脱节。\n\n## 改动\n\n删除独立的 `seg-shape` 动画，改为直接从 `active_anim`/`hover_anim` 派发：\n\n```rust\n// 旧: 独立动画，目标由 raw bool 决定\nlet use_segmented = self.segmented && !self.active && !hov;\nlet seg_mode_anim = ui.animate_bool_with_time_and_easing(\n    Id::new(self.key).with(\"seg-shape\"),\n    use_segmented,\n    0.2,\n    easing::quadratic_out,\n);\n\n// 新: 直接由 active/hover 动画派发，消除边界条件\nlet seg_mode_anim = if self.segmented {\n    1.0 - active_anim.max(hover_anim)\n} else {\n    0.0\n};\n```\n\nseg_mode 现在与 interaction_r、颜色动画共享同一底层动画源，不再有独立的决策时机。segmented→interaction 的形变过渡与交互半径增长完全同步。\n"
+desc = "消除 seg_mode_anim 独立动画，改为 1-active_anim.max(hover_anim) 直接派发，解决 seg_mode 目标用 raw bool 而颜色/交互半径用动画值的边界条件不同步问题"
+
+[[sections]]
+number = "5"
+title = "新增 blend_corner_radius 替代 lerp_corner_radius 修复圆角过渡拉低"
+created_at = "2026-07-23 02:37:01 UTC+8"
+modified_at = "2026-07-23 02:37:01 UTC+8"
+content = "## 问题\n\nitem a（顶部，`above=false, below=true`）被 hover：\n- seg_corner = {12, 12, 4, 4}\n- interaction_corner 初始 = {4, 4, 4, 4}（hover_anim 刚起步）\n- `lerp(interaction, seg, seg_mode)` 将上角从 12 拉向 4，等 `interaction_r` 增长后才拽回 12\n- 视觉效果：hover 时圆角先突然变小，再往回拉大\n\n中间项（item b）没问题：seg_corner = {4,4,4,4}，与 interaction_corner 起点一致。\n\n## 改动\n\n1. `material/util.rs` 新增 `blend_corner_radius`：逐分量 lerp + `.max(b)` 保证结果不低于 seg_corner\n2. `list_item.rs:207` 调用替换：`lerp_corner_radius` → `blend_corner_radius`\n\n与方案 B（seg_mode 由 active/hover 动画派发）互补：方案 B 解决动画输入不同步，blend 解决 lerp 输出拉低。\n"
+desc = "segmented→interaction 过渡中 interaction_corner 初始值为 4 而 seg_corner 自由边为 12，普通 lerp 将 12px 圆角拉向 4 再拽回 12，导致 hover 时顶部/底部项的自由边圆角先变小后变大"
 
 [todo]
 items = []
