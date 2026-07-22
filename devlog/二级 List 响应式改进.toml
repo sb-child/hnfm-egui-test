@@ -1,7 +1,7 @@
 [metadata]
 title = "二级 List 响应式改进"
 created_at = "2026-07-21 21:37:59 UTC+8"
-modified_at = "2026-07-22 21:09:38 UTC+8"
+modified_at = "2026-07-22 21:13:03 UTC+8"
 
 [[sections]]
 number = "1"
@@ -77,6 +77,14 @@ created_at = "2026-07-22 21:09:38 UTC+8"
 modified_at = "2026-07-22 21:09:38 UTC+8"
 content = "## Scrim 覆盖范围\n\nscrim 不覆盖 rail（rail 始终可见可交互）：\n\n```\nscrim: pos2(96, 0), size = (screen_w - 96, screen_h)\n```\n\n覆盖区域：tabs + CentralPanel + terminal + 底层 sidebar（Modal 状态下 sidebar 自己渲染在 scrim 上方盖住 scrim）。\n\n## 分层渲染（Area z-index 自底向上）\n\n```\nArea \"modal_scrim\" (Order::Foreground)\n  → fixed_pos(pos2(96, 0))\n  → 全屏半透明黑色填充，无圆角\n  → Sense::click 关闭 Modal\n\nArea \"modal_content\" (更高 z，同一 Order 靠后创建)\n  → fixed_pos(pos2(96, 0))\n  → Frame: surface_color fill + Rounding { ne: 12, se: 12 } + inner_margin\n  → clip rect 宽度 0→300（展开动画）\n  → 内容 300px 右对齐，超出左边界的被 clip 裁剪\n```\n\n## 圆角不越界\n\n```\n[rail] [█████ scrim ████████████████████████]\n       [╭─ sidebar (Frame fill + ne/se 圆角) ─╮]\n       [│  sidebar content                    │]\n       [╰─────────────────────────────────────╯]\n       [█████ scrim 在圆角空隙可见 ████████████]  ← 正常行为，sidebar fill 盖住下方 scrim\n```\n\nsidebar 自己的 surface_color fill 占据矩形区域（含圆角拐角内侧），下方 scrim 被 fill 完全遮挡。圆角拐角外侧的 scrim 可见——这是正确行为（就像桌面端 flyout 菜单旁边的 scrim 也会透过圆角间隙露出来）。\n\n## 与 Flyout 的区别\n\n| 项 | Modal | Flyout |\n|---|-------|--------|\n| scrim | 有，alpha=0.5，click 关闭 | 无（或可选，很淡） |\n| 触发 | Narrow 下 rail 点击 | Medium 下 hover 防抖后展开 |\n| 关闭 | Esc / 点击 scrim | 鼠标移开 / 点击 sidebar 内项 |\n| z-index | 最高（盖住一切） | 次高（Pinned sidebar 上方，Modal 下方） |\n| Area position | pos2(96, 0) | pos2(96, Panel::top 下方) |\n"
 desc = "Modal 的 scrim 覆盖范围、分层渲染、圆角处理等实现细节"
+
+[[sections]]
+number = "10"
+title = "步骤 2：render_sidebar_content 填充实际 ListItem 内容"
+created_at = "2026-07-22 21:13:03 UTC+8"
+modified_at = "2026-07-22 21:13:03 UTC+8"
+content = "## 变更\n\n- sidebar.rs 添加 `use crate::material::ListItem;` + `use egui::Widget;`\n- `render_sidebar_content` 从占位 label 改为完整 ListItem 渲染：\n  - Standard 单选组：std_0 \"我的世界\"、std_1 \"进入1qjkl异世界\" (supporting: \"qqqqqqq1111\")，互斥单选\n  - Segmented 多选组：seg_0 \"叫我起床\"、seg_1 \"别叫我起床\" (supporting: \"因为我想多睡点觉\")、seg_2 \"在半夜叫我\" (supporting + overline)，独立 toggles\n- 编译通过，零警告"
+desc = "迁移旧 sidebar 的 Standard/多选+ Segmented/多选+ ListItem 渲染到 sidebar.rs 的 render_sidebar_content"
 
 [[todo.items]]
 text = "组件拆分：material/{util,list_item,nav_rail_item,icon_button,ripple}.rs + sidebar.rs + app.rs 瘦身"

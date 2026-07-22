@@ -19,6 +19,9 @@
 
 use std::time::Instant;
 
+use crate::material::ListItem;
+use egui::Widget;
+
 /// 应用中的板块 id（demo 板块）。
 /// 现有 NavRail 测试态（theme_toggle/theme_switch/opt_* 等）保留不动，
 /// 此处仅描述 4 个新的二级 List demo 板块。
@@ -267,14 +270,75 @@ fn render_pinned_panel(
 /// 渲染sidebar内容（可复用）
 fn render_sidebar_content(
     ui: &mut egui::Ui,
-    _list_sel_std: &mut bool,
-    _list_sel_seg_0: &mut bool,
-    _list_sel_seg_1: &mut bool,
-    _list_sel_seg_2: &mut bool,
+    list_sel_std: &mut bool,
+    list_sel_seg_0: &mut bool,
+    list_sel_seg_1: &mut bool,
+    list_sel_seg_2: &mut bool,
 ) {
-    // 这里暂时留空，后续步骤会填充实际内容
-    // 目前只是占位，确保编译通过
-    ui.label("Sidebar content placeholder");
+    ui.heading("Standard (单选)");
+    ui.add_space(4.);
+    ui.vertical(|ui| {
+        ui.style_mut().spacing.item_spacing = egui::Vec2::new(0., 2.);
+        if ListItem::new(
+            "std_0", "我的世界", None, None,
+            *list_sel_std, false, false, false,
+        )
+        .ui(ui)
+        .clicked()
+        {
+            *list_sel_std = true;
+        }
+        if ListItem::new(
+            "std_1", "进入1qjkl异世界", Some("qqqqqqq1111"), None,
+            !*list_sel_std, false, false, false,
+        )
+        .ui(ui)
+        .clicked()
+        {
+            *list_sel_std = false;
+        }
+    });
+
+    ui.add_space(16.);
+    ui.heading("Segmented (多选)");
+    ui.add_space(4.);
+
+    let seg0 = *list_sel_seg_0;
+    let seg1 = *list_sel_seg_1;
+    let seg2 = *list_sel_seg_2;
+
+    ui.vertical(|ui| {
+        ui.style_mut().spacing.item_spacing = egui::Vec2::new(0., 2.);
+        if ListItem::new(
+            "seg_0", "叫我起床", None, None,
+            seg0, true, false, !seg1,
+        )
+        .ui(ui)
+        .clicked()
+        {
+            *list_sel_seg_0 = !*list_sel_seg_0;
+        }
+        if ListItem::new(
+            "seg_1", "别叫我起床", Some("因为我想多睡点觉"), None,
+            seg1, true, !seg0, !seg2,
+        )
+        .ui(ui)
+        .clicked()
+        {
+            *list_sel_seg_1 = !*list_sel_seg_1;
+        }
+        if ListItem::new(
+            "seg_2", "在半夜叫我",
+            Some("喵喵11111111111111111122222211111111111111111"),
+            Some("嗯111111"),
+            seg2, true, !seg1, false,
+        )
+        .ui(ui)
+        .clicked()
+        {
+            *list_sel_seg_2 = !*list_sel_seg_2;
+        }
+    });
 }
 
 /// 自动应用响应式默认（每帧调用，跨阈值仅在 auto 状态下改模式）。
