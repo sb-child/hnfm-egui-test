@@ -65,6 +65,12 @@ impl eframe::App for AppLayout {
         egui::Panel::bottom("bottom-statusbar")
             .resizable(false)
             .show(ui, bottom_statusbar);
+        // 屏幕宽度（导航栏和侧边栏共用）
+        let screen_width = ui.ctx().input(|i| {
+            i.raw.screen_rect
+                .map(|r| r.width())
+                .unwrap_or(800.0)
+        });
         // 导航栏
         egui::Panel::left("navigation-rail")
             .frame(surface_frame)
@@ -77,14 +83,11 @@ impl eframe::App for AppLayout {
                     &mut self.active_2,
                     &mut self.active_3,
                     &mut self.active_opt,
+                    &mut self.sidebar_state,
+                    screen_width,
                 )
             });
         // 二级列表（集成sidebar状态机）
-        let screen_width = ui.ctx().input(|i| {
-            i.raw.screen_rect
-                .map(|r| r.width())
-                .unwrap_or(800.0)
-        });
         sidebar::apply_responsive_default(&mut self.sidebar_state, screen_width);
         sidebar::handle_input(ui.ctx(), &mut self.sidebar_state);
 
@@ -95,9 +98,9 @@ impl eframe::App for AppLayout {
                 .resizable(false)
                 .show_separator_line(false)
                 .show(ui, |ui| {
-                    sidebar::render(
+                    sidebar::render_pinned(
                         ui,
-                        &mut self.sidebar_state,
+                        &self.sidebar_state,
                         &mut self.list_sel_std,
                         &mut self.list_sel_seg_0,
                         &mut self.list_sel_seg_1,
@@ -105,6 +108,18 @@ impl eframe::App for AppLayout {
                     );
                 });
         }
+        // 覆盖层（Flyout / Modal）放在 tabs/terminal 之前，可用空间 = tabs + Central + terminal
+        let content_rect = ui.available_rect_before_wrap();
+        sidebar::render_overlays(
+            ui.ctx(),
+            &mut self.sidebar_state,
+            surface_color,
+            content_rect,
+            &mut self.list_sel_std,
+            &mut self.list_sel_seg_0,
+            &mut self.list_sel_seg_1,
+            &mut self.list_sel_seg_2,
+        );
         // 标签页栏
         egui::Panel::top("tabs").resizable(false).show(ui, tabs);
         // 终端
@@ -156,6 +171,8 @@ fn nav_rail(
     active_2: &mut bool,
     active_3: &mut bool,
     active_opt: &mut u8,
+    sidebar_state: &mut sidebar::SidebarState,
+    screen_width: f32,
 ) {
     // https://m3.material.io/components/navigation-rail/specs
     ui.set_width(96.); // Nav rail collapsed container width = 96 dp
@@ -199,7 +216,29 @@ fn nav_rail(
         {
             *active_opt = 2;
         };
+
+        ui.separator();
+
+        ui.style_mut().spacing.item_spacing = Vec2::new(0., 4.);
+        sidebar_button(ui, sidebar_state, RailId::Files, screen_width);
+        sidebar_button(ui, sidebar_state, RailId::Projects, screen_width);
+        sidebar_button(ui, sidebar_state, RailId::Settings, screen_width);
+        sidebar_button(ui, sidebar_state, RailId::Help, screen_width);
     });
+}
+
+fn sidebar_button(ui: &mut egui::Ui, state: &mut sidebar::SidebarState, rail: RailId, screen_width: f32) {
+    let active = state.mode.rail() == Some(rail);
+    if NavRailItem::new(
+        format!("sidebar_btn_{:?}", rail).as_str(),
+        rail.title(),
+        active,
+    )
+    .ui(ui)
+    .clicked()
+    {
+        sidebar::rail_click(state, rail, screen_width);
+    }
 }
 
 

@@ -156,7 +156,7 @@ pub fn update_hover(
     } else {
         None
     };
-    
+
     // 基础版本：hover时直接切换到Flyout模式（仅在Medium屏幕）
     // 后续会完善为防抖后的逻辑
     if let Some(rail) = hovered_rail {
@@ -223,48 +223,122 @@ pub fn rail_click(state: &mut SidebarState, rail: RailId, screen_width: f32) {
 }
 
 /// 渲染分发：根据 state.mode 调度 Pinned Panel / Flyout Area / Modal Area+scrim。
-pub fn render(
-    ui: &mut egui::Ui,
+
+/// 渲染覆盖层（Flyout / Modal）。每帧调用，不需 Panel。
+pub fn render_overlays(
+    ctx: &egui::Context,
     state: &mut SidebarState,
+    surface_color: egui::Color32,
+    content_rect: egui::Rect,
     list_sel_std: &mut bool,
     list_sel_seg_0: &mut bool,
     list_sel_seg_1: &mut bool,
     list_sel_seg_2: &mut bool,
 ) {
     match state.mode {
-        SidebarMode::Hidden => {
-            ui.set_width(0.0);
-        }
-        SidebarMode::Pinned(rail) => {
-            ui.set_width(300.0);
-            render_pinned_panel(ui, rail, list_sel_std, list_sel_seg_0, list_sel_seg_1, list_sel_seg_2);
-        }
         SidebarMode::Flyout(rail) => {
-            render_pinned_panel(ui, rail, list_sel_std, list_sel_seg_0, list_sel_seg_1, list_sel_seg_2);
+            render_flyout(
+                ctx,
+                rail,
+                surface_color,
+                content_rect,
+                list_sel_std,
+                list_sel_seg_0,
+                list_sel_seg_1,
+                list_sel_seg_2,
+            );
         }
         SidebarMode::Modal(rail) => {
-            render_pinned_panel(ui, rail, list_sel_std, list_sel_seg_0, list_sel_seg_1, list_sel_seg_2);
+            render_flyout(
+                ctx,
+                rail,
+                surface_color,
+                content_rect,
+                list_sel_std,
+                list_sel_seg_0,
+                list_sel_seg_1,
+                list_sel_seg_2,
+            );
         }
+        _ => {}
     }
 }
 
-/// 渲染Pinned模式的内联面板
-fn render_pinned_panel(
-    ui: &mut egui::Ui,
+fn render_flyout(
+    ctx: &egui::Context,
     rail: RailId,
+    surface_color: egui::Color32,
+    content_rect: egui::Rect,
     list_sel_std: &mut bool,
     list_sel_seg_0: &mut bool,
     list_sel_seg_1: &mut bool,
     list_sel_seg_2: &mut bool,
 ) {
-    ui.style_mut().spacing.item_spacing = egui::Vec2::new(0.0, 0.0);
-    
-    // 显示rail标题
-    ui.heading(rail.title());
-    ui.add_space(4.);
-    
-    // 渲染list内容
-    render_sidebar_content(ui, list_sel_std, list_sel_seg_0, list_sel_seg_1, list_sel_seg_2);
+    let frame = egui::containers::Frame {
+        inner_margin: egui::Margin::symmetric(0, 4), // app.rs surface_frame
+        outer_margin: egui::Margin::ZERO,
+        corner_radius: egui::CornerRadius {
+            nw: 0,
+            ne: 12,
+            sw: 0,
+            se: 12,
+        },
+        shadow: egui::Shadow {
+            offset: [8, 0],
+            blur: 24,
+            spread: 0,
+            color: egui::Color32::from_black_alpha(60),
+        },
+        fill: surface_color,
+        stroke: egui::Stroke::NONE, // app.rs surface_frame
+    };
+
+    egui::Area::new(egui::Id::new("sidebar_flyout"))
+        .fixed_pos(egui::pos2(96.0, content_rect.top()))
+        .constrain(false)
+        .order(egui::Order::Foreground)
+        .interactable(true)
+        .show(ctx, |ui| {
+            ui.allocate_ui(egui::vec2(300.0, content_rect.height()), |ui| {
+                frame.show(ui, |ui| {
+                    ui.style_mut().spacing.item_spacing = egui::Vec2::new(0.0, 0.0);
+                    ui.heading(rail.title());
+                    ui.add_space(4.);
+                    render_sidebar_content(
+                        ui,
+                        list_sel_std,
+                        list_sel_seg_0,
+                        list_sel_seg_1,
+                        list_sel_seg_2,
+                    );
+                    ui.add_space(ui.available_height());
+                });
+            });
+        });
+}
+
+/// 渲染面板内容（Pinned 模式）。在 Panel::left 内部调用。
+pub fn render_pinned(
+    ui: &mut egui::Ui,
+    state: &SidebarState,
+    list_sel_std: &mut bool,
+    list_sel_seg_0: &mut bool,
+    list_sel_seg_1: &mut bool,
+    list_sel_seg_2: &mut bool,
+) {
+    if let SidebarMode::Pinned(rail) = state.mode {
+        ui.set_width(300.0);
+        ui.style_mut().spacing.item_spacing = egui::Vec2::new(0.0, 0.0);
+        ui.heading(rail.title());
+        ui.add_space(4.);
+        render_sidebar_content(
+            ui,
+            list_sel_std,
+            list_sel_seg_0,
+            list_sel_seg_1,
+            list_sel_seg_2,
+        );
+    }
 }
 
 /// 渲染sidebar内容（可复用）
@@ -280,8 +354,14 @@ fn render_sidebar_content(
     ui.vertical(|ui| {
         ui.style_mut().spacing.item_spacing = egui::Vec2::new(0., 2.);
         if ListItem::new(
-            "std_0", "我的世界", None, None,
-            *list_sel_std, false, false, false,
+            "std_0",
+            "我的世界",
+            None,
+            None,
+            *list_sel_std,
+            false,
+            false,
+            false,
         )
         .ui(ui)
         .clicked()
@@ -289,8 +369,14 @@ fn render_sidebar_content(
             *list_sel_std = true;
         }
         if ListItem::new(
-            "std_1", "进入1qjkl异世界", Some("qqqqqqq1111"), None,
-            !*list_sel_std, false, false, false,
+            "std_1",
+            "进入1qjkl异世界",
+            Some("qqqqqqq1111"),
+            None,
+            !*list_sel_std,
+            false,
+            false,
+            false,
         )
         .ui(ui)
         .clicked()
@@ -309,18 +395,21 @@ fn render_sidebar_content(
 
     ui.vertical(|ui| {
         ui.style_mut().spacing.item_spacing = egui::Vec2::new(0., 2.);
-        if ListItem::new(
-            "seg_0", "叫我起床", None, None,
-            seg0, true, false, !seg1,
-        )
-        .ui(ui)
-        .clicked()
+        if ListItem::new("seg_0", "叫我起床", None, None, seg0, true, false, !seg1)
+            .ui(ui)
+            .clicked()
         {
             *list_sel_seg_0 = !*list_sel_seg_0;
         }
         if ListItem::new(
-            "seg_1", "别叫我起床", Some("因为我想多睡点觉"), None,
-            seg1, true, !seg0, !seg2,
+            "seg_1",
+            "别叫我起床",
+            Some("因为我想多睡点觉"),
+            None,
+            seg1,
+            true,
+            !seg0,
+            !seg2,
         )
         .ui(ui)
         .clicked()
@@ -328,10 +417,14 @@ fn render_sidebar_content(
             *list_sel_seg_1 = !*list_sel_seg_1;
         }
         if ListItem::new(
-            "seg_2", "在半夜叫我",
+            "seg_2",
+            "在半夜叫我",
             Some("喵喵11111111111111111122222211111111111111111"),
             Some("嗯111111"),
-            seg2, true, !seg1, false,
+            seg2,
+            true,
+            !seg1,
+            false,
         )
         .ui(ui)
         .clicked()
@@ -347,10 +440,10 @@ pub fn apply_responsive_default(state: &mut SidebarState, screen_width: f32) {
     if state.is_user_pinned {
         return;
     }
-    
+
     // 获取当前屏幕宽度对应的默认模式
     let new_default = responsive_default(state.pinned_rail, screen_width);
-    
+
     // 只在auto模式下重置（用户未手动Pin）
     // 检查当前模式是否需要更新
     let should_update = match (state.mode, new_default) {
@@ -361,7 +454,7 @@ pub fn apply_responsive_default(state: &mut SidebarState, screen_width: f32) {
         // 其他情况不更新
         _ => false,
     };
-    
+
     if should_update {
         state.mode = new_default;
     }
@@ -375,6 +468,6 @@ pub fn handle_input(ctx: &egui::Context, state: &mut SidebarState) {
             state.mode = SidebarMode::Hidden;
         }
     }
-    
+
     // 注意：scrim点击关闭将在render函数中处理，因为需要Area的interact响应
 }

@@ -1,7 +1,7 @@
 [metadata]
 title = "二级 List 响应式改进"
 created_at = "2026-07-21 21:37:59 UTC+8"
-modified_at = "2026-07-22 21:13:03 UTC+8"
+modified_at = "2026-07-22 21:51:13 UTC+8"
 
 [[sections]]
 number = "1"
@@ -86,6 +86,22 @@ modified_at = "2026-07-22 21:13:03 UTC+8"
 content = "## 变更\n\n- sidebar.rs 添加 `use crate::material::ListItem;` + `use egui::Widget;`\n- `render_sidebar_content` 从占位 label 改为完整 ListItem 渲染：\n  - Standard 单选组：std_0 \"我的世界\"、std_1 \"进入1qjkl异世界\" (supporting: \"qqqqqqq1111\")，互斥单选\n  - Segmented 多选组：seg_0 \"叫我起床\"、seg_1 \"别叫我起床\" (supporting: \"因为我想多睡点觉\")、seg_2 \"在半夜叫我\" (supporting + overline)，独立 toggles\n- 编译通过，零警告"
 desc = "迁移旧 sidebar 的 Standard/多选+ Segmented/多选+ ListItem 渲染到 sidebar.rs 的 render_sidebar_content"
 
+[[sections]]
+number = "11"
+title = "步骤 3：Flyout 覆盖层渲染"
+created_at = "2026-07-22 21:19:48 UTC+8"
+modified_at = "2026-07-22 21:19:48 UTC+8"
+content = "## 变更\n\n### sidebar.rs\n- 删除旧 `render` 函数和 `render_pinned_panel` 函数\n- 新增 `pub fn render_overlays(ctx, state, surface_color, list_sel_*)`: 覆盖层分发\n  - Flyout → `render_flyout`\n  - Modal → `render_flyout` (placeholder)\n- 新增 `fn render_flyout(ctx, rail, surface_color, list_sel_*)`: Area 覆盖层\n  - 固定位置 pos2(96, 0)（rail 右侧）\n  - Frame: inner_margin 12, ne/se CornerRadius=12, Shadow offset=[8,0] blur=24, stroke 1px\n  - Order::Foreground, constrain=false, interactable\n- 新增 `pub fn render_pinned(ui, state, list_sel_*)`: Panel 内部渲染\n  - 读 state.mode 取 Pinned(rail)，set_width(300) + heading + content\n- `render_sidebar_content` 保持不变\n\n### app.rs\n- 调用顺序：`render_overlays` → `render_pinned`(Panel 内部)\n- render_overlays 传入 `surface_color` 用于 Flyout 背景\n- render_pinned 传入 `&self.sidebar_state`（只读，不需 &mut）\n\n## 预期行为\n- Wide(>=1000): Pinned Panel 正常显示\n- Medium(<1000): 点击 rail 图标 → Flyout 覆盖层弹出（阴影+圆角），不挤压内容区\n- 再次点击同一 rail → Flyout 关闭"
+desc = "拆分 render 为 render_overlays(Area)+render_pinned(Panel)，实现 Flyout 阴影圆角覆盖层渲染"
+
+[[sections]]
+number = "12"
+title = "步骤 3 完成：Flyout 尺寸精确对齐 + NavRail 测试按钮"
+created_at = "2026-07-22 21:51:08 UTC+8"
+modified_at = "2026-07-22 21:51:08 UTC+8"
+content = "## 最终方案\n\n### Flyout 尺寸\n- x=96（rail 右侧），y=`content_rect.top()`，高度=`content_rect.height()`\n- `render_overlays` 在 sidebar Panel 之后、tabs/terminal 之前调用\n- `ui.available_rect_before_wrap()` 此时已扣掉 statusbar，但 tabs/terminal 未占位 → 高度=`screen_h - statusbar_h`\n- 覆盖范围：tabs + CentralPanel + terminal（和 Pinned sidebar 一致）\n\n### 关键实现细节\n- Area 定位用 `allocate_ui(vec2(300, content_rect.height()))` 固定尺寸\n- Frame 背景填满 max_rect，内容用 `ui.add_space(ui.available_height())` 撑满\n- Frame: inner_margin 12, ne/se CornerRadius=12, Shadow offset=[8,0] blur=24, stroke 1px\n\n### NavRail 测试按钮\n- `nav_rail` 新增 `sidebar_state: &mut SidebarState` + `screen_width` 参数\n- 底部 separator 下方 4 个临时按钮：Files/Projects/Settings/Help\n- `sidebar_button` 辅助函数：active=当前 mode.rail() 匹配，clicked→rail_click\n\n### 文件改动\n- `src/sidebar.rs`: `render` → `render_overlays` + `render_pinned`，新增 `render_flyout`\n- `src/app.rs`: `nav_rail` 参数扩展，`render_overlays` 调用位置调整，`content_rect` 替代 `screen_rect`\n- 编译通过，零警告\n\n### 当前步骤状态\n- 步骤 1 ✓: 状态机重构 + Panel 条件渲染\n- 步骤 2 ✓: render_sidebar_content 填充 ListItem\n- 步骤 3 ✓: Flyout 覆盖层渲染 + 尺寸对齐\n- 步骤 4: Modal 渲染（scrim + Area）\n- 步骤 5: Hover 防抖 180ms\n- 步骤 6: Pin/Unpin\n- 步骤 7: Hover Preview 浮层\n- 步骤 8: 视觉层级（圆角/阴影动态切换）\n- 步骤 9: 动画过渡"
+desc = "Flyout 覆盖层渲染完成，高度用 available_rect_before_wrap 精确匹配内容区，NavRail 底部 4 个临时测试按钮"
+
 [[todo.items]]
 text = "组件拆分：material/{util,list_item,nav_rail_item,icon_button,ripple}.rs + sidebar.rs + app.rs 瘦身"
 completed = true
@@ -126,4 +142,12 @@ text = "P2: 响应式三阶默认 + Modal + Hover Preview（重来）"
 completed = false
 related_sections = [
     "5",
+]
+
+[[todo.items]]
+text = "步骤 4: Modal 渲染（scrim + Area 覆盖层）"
+completed = false
+related_sections = [
+    "9",
+    "12",
 ]
