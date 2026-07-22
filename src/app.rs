@@ -3,7 +3,8 @@ use egui::{RichText, Stroke, Vec2, Widget};
 use crate::material::color::ThemeVariant;
 use crate::{
     fonts, material,
-    material::{ListItem, NavRailItem},
+    material::NavRailItem,
+    sidebar::{self, RailId, SidebarState},
 };
 
 pub struct AppLayout {
@@ -18,6 +19,7 @@ pub struct AppLayout {
     list_sel_seg_0: bool,
     list_sel_seg_1: bool,
     list_sel_seg_2: bool,
+    sidebar_state: SidebarState,
 }
 
 impl AppLayout {
@@ -42,6 +44,7 @@ impl AppLayout {
             list_sel_seg_0: false,
             list_sel_seg_1: false,
             list_sel_seg_2: false,
+            sidebar_state: SidebarState::new(RailId::Files),
         }
     }
 }
@@ -76,20 +79,32 @@ impl eframe::App for AppLayout {
                     &mut self.active_opt,
                 )
             });
-        // 二级列表
-        egui::Panel::left("sidebar")
-            .frame(surface_frame)
-            .resizable(false)
-            .show_separator_line(false)
-            .show(ui, |ui| {
-                sidebar(
-                    ui,
-                    &mut self.list_sel_std,
-                    &mut self.list_sel_seg_0,
-                    &mut self.list_sel_seg_1,
-                    &mut self.list_sel_seg_2,
-                )
-            });
+        // 二级列表（集成sidebar状态机）
+        let screen_width = ui.ctx().input(|i| {
+            i.raw.screen_rect
+                .map(|r| r.width())
+                .unwrap_or(800.0)
+        });
+        sidebar::apply_responsive_default(&mut self.sidebar_state, screen_width);
+        sidebar::handle_input(ui.ctx(), &mut self.sidebar_state);
+
+        let is_pinned = matches!(self.sidebar_state.mode, sidebar::SidebarMode::Pinned(_));
+        if is_pinned {
+            egui::Panel::left("sidebar")
+                .frame(surface_frame)
+                .resizable(false)
+                .show_separator_line(false)
+                .show(ui, |ui| {
+                    sidebar::render(
+                        ui,
+                        &mut self.sidebar_state,
+                        &mut self.list_sel_std,
+                        &mut self.list_sel_seg_0,
+                        &mut self.list_sel_seg_1,
+                        &mut self.list_sel_seg_2,
+                    );
+                });
+        }
         // 标签页栏
         egui::Panel::top("tabs").resizable(false).show(ui, tabs);
         // 终端
@@ -187,115 +202,7 @@ fn nav_rail(
     });
 }
 
-fn sidebar(
-    ui: &mut egui::Ui,
-    list_sel_std: &mut bool,
-    list_sel_seg_0: &mut bool,
-    list_sel_seg_1: &mut bool,
-    list_sel_seg_2: &mut bool,
-) {
-    ui.set_width(300.);
-    ui.style_mut().spacing.item_spacing = Vec2::new(0.0, 0.0);
 
-    ui.heading("Standard (单选)");
-    ui.add_space(4.);
-    ui.vertical(|ui| {
-        ui.style_mut().spacing.item_spacing = Vec2::new(0., 2.);
-        if ListItem::new(
-            "std_0",
-            "我的世界",
-            None,
-            None,
-            *list_sel_std,
-            false,
-            false,
-            false,
-        )
-        .ui(ui)
-        .clicked()
-        {
-            *list_sel_std = true;
-        }
-        if ListItem::new(
-            "std_1",
-            "进入1qjkl异世界",
-            Some("qqqqqqq1111"),
-            None,
-            !*list_sel_std,
-            false,
-            false,
-            false,
-        )
-        .ui(ui)
-        .clicked()
-        {
-            *list_sel_std = false;
-        }
-    });
-
-    ui.add_space(16.);
-    ui.heading("Segmented (多选)");
-    ui.add_space(4.);
-
-    let seg0 = *list_sel_seg_0;
-    let seg1 = *list_sel_seg_1;
-    let seg2 = *list_sel_seg_2;
-
-    let sego_above_0 = false;
-    let sego_below_0 = !seg1;
-    let sego_above_1 = !seg0;
-    let sego_below_1 = !seg2;
-    let sego_above_2 = !seg1;
-    let sego_below_2 = false;
-    ui.vertical(|ui| {
-        ui.style_mut().spacing.item_spacing = Vec2::new(0., 2.);
-        if ListItem::new(
-            "seg_0",
-            "叫我起床",
-            None,
-            None,
-            seg0,
-            true,
-            sego_above_0,
-            sego_below_0,
-        )
-        .ui(ui)
-        .clicked()
-        {
-            *list_sel_seg_0 = !*list_sel_seg_0;
-        }
-        if ListItem::new(
-            "seg_1",
-            "别叫我起床",
-            Some("因为我想多睡点觉"),
-            None,
-            seg1,
-            true,
-            sego_above_1,
-            sego_below_1,
-        )
-        .ui(ui)
-        .clicked()
-        {
-            *list_sel_seg_1 = !*list_sel_seg_1;
-        }
-        if ListItem::new(
-            "seg_2",
-            "在半夜叫我",
-            Some("喵喵11111111111111111122222211111111111111111"),
-            Some("嗯111111"),
-            seg2,
-            true,
-            sego_above_2,
-            sego_below_2,
-        )
-        .ui(ui)
-        .clicked()
-        {
-            *list_sel_seg_2 = !*list_sel_seg_2;
-        }
-    });
-}
 
 fn tabs(ui: &mut egui::Ui) {
     ui.vertical(|ui| {

@@ -139,28 +139,87 @@ pub fn responsive_default(rail: RailId, screen_width: f32) -> SidebarMode {
 
 /// 由 Rail hover 触发的状态更新（180ms 防抖）。
 /// 返回是否需要切换模式（由调用者根据响应式默认再决定 Flyout / Modal）。
-#[allow(unused_variables)]
 pub fn update_hover(
     state: &mut SidebarState,
     hovered_rail: Option<RailId>,
     now: Instant,
     screen_width: f32,
 ) {
-    todo!(
-        "P1: 校验 hover_rail 切换时刻清零 hover_since；超过 180ms 后切换 mode 到 Flyout 或生成 Preview"
-    )
+    // 基础版本：暂不实现防抖，直接更新hover状态
+    // 后续步骤5会实现完整的180ms防抖逻辑
+    state.hover_rail = hovered_rail;
+    state.hover_since = if hovered_rail.is_some() {
+        Some(now)
+    } else {
+        None
+    };
+    
+    // 基础版本：hover时直接切换到Flyout模式（仅在Medium屏幕）
+    // 后续会完善为防抖后的逻辑
+    if let Some(rail) = hovered_rail {
+        if screen_width < WIDE_MIN && screen_width >= MEDIUM_MIN {
+            // Medium屏幕：hover触发Flyout
+            state.mode = SidebarMode::Flyout(rail);
+        }
+    } else if state.mode.is_overlay() && !state.mode.is_modal() {
+        // 鼠标离开且当前是Flyout模式，隐藏
+        state.mode = SidebarMode::Hidden;
+    }
 }
 
 /// Rail 点击触发的模式切换。
-#[allow(unused_variables)]
 pub fn rail_click(state: &mut SidebarState, rail: RailId, screen_width: f32) {
-    todo!(
-        "P1: Hidden 点击 -> Pinned(Wide) / Flyout(Medium) / Modal(Narrow)；Pinned(r) 点击 r -> Hidden；Pinned(a) 点击 b -> 切 pinned_rail=b（覆盖预览态）"
-    )
+    match state.mode {
+        SidebarMode::Hidden => {
+            // Hidden状态：根据屏幕宽度选择模式
+            if screen_width >= WIDE_MIN {
+                // Wide屏幕：切换到Pinned模式
+                state.mode = SidebarMode::Pinned(rail);
+                state.pinned_rail = rail;
+            } else if screen_width >= MEDIUM_MIN {
+                // Medium屏幕：切换到Flyout模式
+                state.mode = SidebarMode::Flyout(rail);
+                state.pinned_rail = rail;
+            } else {
+                // Narrow屏幕：切换到Modal模式
+                state.mode = SidebarMode::Modal(rail);
+                state.pinned_rail = rail;
+            }
+        }
+        SidebarMode::Pinned(current_rail) => {
+            if current_rail == rail {
+                // 点击当前rail：隐藏
+                state.mode = SidebarMode::Hidden;
+            } else {
+                // 点击其他rail：切换pinned_rail
+                state.pinned_rail = rail;
+                state.mode = SidebarMode::Pinned(rail);
+            }
+        }
+        SidebarMode::Flyout(current_rail) => {
+            if current_rail == rail {
+                // 点击当前rail：隐藏Flyout
+                state.mode = SidebarMode::Hidden;
+            } else {
+                // 点击其他rail：切换到该rail的Flyout
+                state.pinned_rail = rail;
+                state.mode = SidebarMode::Flyout(rail);
+            }
+        }
+        SidebarMode::Modal(current_rail) => {
+            if current_rail == rail {
+                // 点击当前rail：隐藏Modal
+                state.mode = SidebarMode::Hidden;
+            } else {
+                // 点击其他rail：切换到该rail的Modal
+                state.pinned_rail = rail;
+                state.mode = SidebarMode::Modal(rail);
+            }
+        }
+    }
 }
 
 /// 渲染分发：根据 state.mode 调度 Pinned Panel / Flyout Area / Modal Area+scrim。
-#[allow(unused_variables)]
 pub fn render(
     ui: &mut egui::Ui,
     state: &mut SidebarState,
@@ -169,24 +228,89 @@ pub fn render(
     list_sel_seg_1: &mut bool,
     list_sel_seg_2: &mut bool,
 ) {
-    todo!(
-        "P1+P2: 根据 mode 分发到 render_pinned_panel / render_flyout_area / render_modal / 不渲染"
-    )
+    match state.mode {
+        SidebarMode::Hidden => {
+            ui.set_width(0.0);
+        }
+        SidebarMode::Pinned(rail) => {
+            ui.set_width(300.0);
+            render_pinned_panel(ui, rail, list_sel_std, list_sel_seg_0, list_sel_seg_1, list_sel_seg_2);
+        }
+        SidebarMode::Flyout(rail) => {
+            render_pinned_panel(ui, rail, list_sel_std, list_sel_seg_0, list_sel_seg_1, list_sel_seg_2);
+        }
+        SidebarMode::Modal(rail) => {
+            render_pinned_panel(ui, rail, list_sel_std, list_sel_seg_0, list_sel_seg_1, list_sel_seg_2);
+        }
+    }
+}
+
+/// 渲染Pinned模式的内联面板
+fn render_pinned_panel(
+    ui: &mut egui::Ui,
+    rail: RailId,
+    list_sel_std: &mut bool,
+    list_sel_seg_0: &mut bool,
+    list_sel_seg_1: &mut bool,
+    list_sel_seg_2: &mut bool,
+) {
+    ui.style_mut().spacing.item_spacing = egui::Vec2::new(0.0, 0.0);
+    
+    // 显示rail标题
+    ui.heading(rail.title());
+    ui.add_space(4.);
+    
+    // 渲染list内容
+    render_sidebar_content(ui, list_sel_std, list_sel_seg_0, list_sel_seg_1, list_sel_seg_2);
+}
+
+/// 渲染sidebar内容（可复用）
+fn render_sidebar_content(
+    ui: &mut egui::Ui,
+    _list_sel_std: &mut bool,
+    _list_sel_seg_0: &mut bool,
+    _list_sel_seg_1: &mut bool,
+    _list_sel_seg_2: &mut bool,
+) {
+    // 这里暂时留空，后续步骤会填充实际内容
+    // 目前只是占位，确保编译通过
+    ui.label("Sidebar content placeholder");
 }
 
 /// 自动应用响应式默认（每帧调用，跨阈值仅在 auto 状态下改模式）。
-#[allow(unused_variables)]
 pub fn apply_responsive_default(state: &mut SidebarState, screen_width: f32) {
+    // 用户手动Pin过，不自动切换
     if state.is_user_pinned {
         return;
     }
+    
+    // 获取当前屏幕宽度对应的默认模式
     let new_default = responsive_default(state.pinned_rail, screen_width);
-    let _ = new_default;
-    todo!("P2: 检测当前 mode 与 new_default 是否冲突；只在 auto 模式下重置")
+    
+    // 只在auto模式下重置（用户未手动Pin）
+    // 检查当前模式是否需要更新
+    let should_update = match (state.mode, new_default) {
+        // 当前Hidden，但屏幕宽度应该显示Pinned
+        (SidebarMode::Hidden, SidebarMode::Pinned(_)) => true,
+        // 当前Pinned，但屏幕宽度应该Hidden
+        (SidebarMode::Pinned(_), SidebarMode::Hidden) => true,
+        // 其他情况不更新
+        _ => false,
+    };
+    
+    if should_update {
+        state.mode = new_default;
+    }
 }
 
 /// 输入 Event 处理（Modal 的 Esc / scrim 点击关闭）。
-#[allow(unused_variables)]
 pub fn handle_input(ctx: &egui::Context, state: &mut SidebarState) {
-    todo!("P2: Esc -> Hidden；scrim 区域 interact click -> Hidden")
+    // 处理Esc键关闭Modal
+    if state.mode.is_modal() {
+        if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+            state.mode = SidebarMode::Hidden;
+        }
+    }
+    
+    // 注意：scrim点击关闭将在render函数中处理，因为需要Area的interact响应
 }
