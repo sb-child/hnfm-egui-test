@@ -15,10 +15,6 @@ pub struct AppLayout {
     active_2_before: bool,
     active_3: bool,
     active_opt: u8,
-    list_sel_std: bool,
-    list_sel_seg_0: bool,
-    list_sel_seg_1: bool,
-    list_sel_seg_2: bool,
     sidebar_state: SidebarState,
 }
 
@@ -40,10 +36,6 @@ impl AppLayout {
             active_2_before: false,
             active_3: false,
             active_opt: 0,
-            list_sel_std: false,
-            list_sel_seg_0: false,
-            list_sel_seg_1: false,
-            list_sel_seg_2: false,
             sidebar_state: SidebarState::new(Some(RailId::Files)),
         }
     }
@@ -52,7 +44,6 @@ impl AppLayout {
 impl eframe::App for AppLayout {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let surface_color = material::color::access(|_p, s| s.surface).into();
-        // surface背景
         let surface_frame = egui::containers::Frame {
             inner_margin: egui::epaint::Margin::symmetric(0, 4),
             outer_margin: egui::epaint::Margin::same(0),
@@ -61,21 +52,23 @@ impl eframe::App for AppLayout {
             fill: surface_color,
             stroke: Stroke::NONE,
         };
-        // 屏幕宽度（导航栏和侧边栏共用）
         let screen_width = ui
             .ctx()
             .input(|i| i.raw.screen_rect.map(|r| r.width()).unwrap_or(800.0));
+
         // 状态栏
         egui::Panel::bottom("bottom-statusbar")
             .resizable(false)
             .show(ui, |ui| bottom_statusbar(ui, &self.sidebar_state, screen_width));
+
         // 导航栏
+        let mut hovered_rail = None;
         egui::Panel::left("navigation-rail")
             .frame(surface_frame)
             .resizable(false)
             .show_separator_line(false)
             .show(ui, |ui| {
-                nav_rail(
+                hovered_rail = nav_rail(
                     ui,
                     &mut self.active_1,
                     &mut self.active_2,
@@ -83,30 +76,32 @@ impl eframe::App for AppLayout {
                     &mut self.active_opt,
                     &mut self.sidebar_state,
                     screen_width,
-                )
+                );
             });
-        // 二级列表（集成sidebar状态机）
-        sidebar::apply_responsive_default(&mut self.sidebar_state, screen_width);
-        sidebar::handle_input(ui.ctx(), &mut self.sidebar_state);
 
-        let is_pinned = matches!(self.sidebar_state.mode, sidebar::SidebarMode::Pinned);
-        if is_pinned {
+        // 统一状态机更新
+        let now = std::time::Instant::now();
+        if let Some(delay) = self.sidebar_state.refresh(
+            ui.ctx(),
+            screen_width,
+            now,
+            hovered_rail,
+        ) {
+            ui.ctx().request_repaint_after(delay);
+        }
+
+        // 渲染 Pinned 面板
+        if matches!(self.sidebar_state.render_mode(), sidebar::RenderMode::Pinned(_)) {
             egui::Panel::left("sidebar")
                 .frame(surface_frame)
                 .resizable(false)
                 .show_separator_line(false)
                 .show(ui, |ui| {
-                    sidebar::render_pinned(
-                        ui,
-                        &self.sidebar_state,
-                        &mut self.list_sel_std,
-                        &mut self.list_sel_seg_0,
-                        &mut self.list_sel_seg_1,
-                        &mut self.list_sel_seg_2,
-                    );
+                    sidebar::render_pinned(ui, &mut self.sidebar_state);
                 });
         }
-        // 覆盖层（Flyout / Modal）放在 tabs/terminal 之前，可用空间 = tabs + Central + terminal
+
+        // 覆盖层（Flyout）
         let content_rect = ui.available_rect_before_wrap();
         sidebar::render_overlays(
             ui.ctx(),
@@ -114,22 +109,23 @@ impl eframe::App for AppLayout {
             surface_color,
             content_rect,
             screen_width,
-            &mut self.list_sel_std,
-            &mut self.list_sel_seg_0,
-            &mut self.list_sel_seg_1,
-            &mut self.list_sel_seg_2,
         );
-        sidebar::check_flyout_leave(ui.ctx(), &mut self.sidebar_state, content_rect);
+        self.sidebar_state
+            .check_flyout_leave(ui.ctx(), content_rect);
+
         // 标签页栏
         egui::Panel::top("tabs").resizable(false).show(ui, tabs);
+
         // 终端
         egui::Panel::bottom("terminal-tab")
             .resizable(true)
             .default_size(200.0)
             .size_range(60.0..=600.0)
             .show_collapsible(ui, &mut self.terminal_expanded, terminal);
+
         // 内容区
         egui::CentralPanel::default().show(ui, content);
+
         // 主题
         if self.active_1 != self.active_1_before {
             let new_theme_mode = if self.active_1 {
@@ -158,13 +154,16 @@ impl eframe::App for AppLayout {
     }
 }
 
-fn bottom_statusbar(ui: &mut egui::Ui, state: &sidebar::SidebarState, screen_width: f32) {
-    let mode_str = format!("{:?}", state.mode);
-    let active_str = state.active_rail.map_or("None".to_string(), |r| format!("{:?}", r));
-    let trigger_str = state.flyout_trigger.map_or("None".to_string(), |t| format!("{:?}", t));
+fn bottom_statusbar(ui: &mut egui::Ui, state: &SidebarState, screen_width: f32) {
+    let mode_str = state.debug_mode_str();
+    let active_str = state
+        .active_rail()
+        .map_or("None".to_string(), |r| format!("{:?}", r));
+    let trigger_str = state.debug_trigger_str();
+    let overlay_str = if state.is_overlay() { "O" } else { "-" };
     ui.horizontal(|ui| {
         ui.label(format!(
-            "Mode: {mode_str}  Active: {active_str}  Trigger: {trigger_str}  Screen: {screen_width:.0}px"
+            "M:{mode_str} A:{active_str} T:{trigger_str} {overlay_str}  W:{screen_width:.0}",
         ));
         if ui.button("test").clicked() {}
     });
@@ -176,11 +175,10 @@ fn nav_rail(
     active_2: &mut bool,
     active_3: &mut bool,
     active_opt: &mut u8,
-    sidebar_state: &mut sidebar::SidebarState,
+    sidebar_state: &mut SidebarState,
     screen_width: f32,
-) {
-    // https://m3.material.io/components/navigation-rail/specs
-    ui.set_width(96.); // Nav rail collapsed container width = 96 dp
+) -> Option<RailId> {
+    ui.set_width(96.);
 
     ui.vertical(|ui| {
         ui.add_space(44.);
@@ -238,25 +236,18 @@ fn nav_rail(
         if sidebar_button(ui, sidebar_state, RailId::Help, screen_width) {
             hovered_rail = Some(RailId::Help);
         }
-        let now = std::time::Instant::now();
-        if let Some(delay) = sidebar::update_hover(
-            sidebar_state,
-            hovered_rail,
-            now,
-            screen_width,
-        ) {
-            ui.ctx().request_repaint_after(delay);
-        }
-    });
+        hovered_rail
+    })
+    .inner
 }
 
 fn sidebar_button(
     ui: &mut egui::Ui,
-    state: &mut sidebar::SidebarState,
+    state: &mut SidebarState,
     rail: RailId,
     screen_width: f32,
 ) -> bool {
-    let active = state.active_rail == Some(rail);
+    let active = state.active_rail() == Some(rail);
     let resp = NavRailItem::new(
         format!("sidebar_btn_{:?}", rail).as_str(),
         rail.title(),
@@ -264,7 +255,7 @@ fn sidebar_button(
     )
     .ui(ui);
     if resp.clicked() {
-        sidebar::rail_click(state, rail, screen_width);
+        state.click_rail(rail, screen_width);
     }
     resp.hovered()
 }
@@ -315,7 +306,4 @@ fn content(ui: &mut egui::Ui) {
                 .variation("wght", i),
         );
     }
-
-    // ui.add_space(15.);
-    // ui.label(t);
 }
