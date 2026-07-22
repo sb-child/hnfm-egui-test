@@ -1,7 +1,7 @@
 [metadata]
 title = "二级 List 响应式改进"
 created_at = "2026-07-21 21:37:59 UTC+8"
-modified_at = "2026-07-22 21:51:13 UTC+8"
+modified_at = "2026-07-23 00:21:46 UTC+8"
 
 [[sections]]
 number = "1"
@@ -102,6 +102,47 @@ modified_at = "2026-07-22 21:51:08 UTC+8"
 content = "## 最终方案\n\n### Flyout 尺寸\n- x=96（rail 右侧），y=`content_rect.top()`，高度=`content_rect.height()`\n- `render_overlays` 在 sidebar Panel 之后、tabs/terminal 之前调用\n- `ui.available_rect_before_wrap()` 此时已扣掉 statusbar，但 tabs/terminal 未占位 → 高度=`screen_h - statusbar_h`\n- 覆盖范围：tabs + CentralPanel + terminal（和 Pinned sidebar 一致）\n\n### 关键实现细节\n- Area 定位用 `allocate_ui(vec2(300, content_rect.height()))` 固定尺寸\n- Frame 背景填满 max_rect，内容用 `ui.add_space(ui.available_height())` 撑满\n- Frame: inner_margin 12, ne/se CornerRadius=12, Shadow offset=[8,0] blur=24, stroke 1px\n\n### NavRail 测试按钮\n- `nav_rail` 新增 `sidebar_state: &mut SidebarState` + `screen_width` 参数\n- 底部 separator 下方 4 个临时按钮：Files/Projects/Settings/Help\n- `sidebar_button` 辅助函数：active=当前 mode.rail() 匹配，clicked→rail_click\n\n### 文件改动\n- `src/sidebar.rs`: `render` → `render_overlays` + `render_pinned`，新增 `render_flyout`\n- `src/app.rs`: `nav_rail` 参数扩展，`render_overlays` 调用位置调整，`content_rect` 替代 `screen_rect`\n- 编译通过，零警告\n\n### 当前步骤状态\n- 步骤 1 ✓: 状态机重构 + Panel 条件渲染\n- 步骤 2 ✓: render_sidebar_content 填充 ListItem\n- 步骤 3 ✓: Flyout 覆盖层渲染 + 尺寸对齐\n- 步骤 4: Modal 渲染（scrim + Area）\n- 步骤 5: Hover 防抖 180ms\n- 步骤 6: Pin/Unpin\n- 步骤 7: Hover Preview 浮层\n- 步骤 8: 视觉层级（圆角/阴影动态切换）\n- 步骤 9: 动画过渡"
 desc = "Flyout 覆盖层渲染完成，高度用 available_rect_before_wrap 精确匹配内容区，NavRail 底部 4 个临时测试按钮"
 
+[[sections]]
+number = "13"
+title = "步骤 4 完成：Modal 渲染（scrim + Area 覆盖层）"
+created_at = "2026-07-22 22:08:39 UTC+8"
+modified_at = "2026-07-22 22:08:39 UTC+8"
+content = "## 变更\n\n严格按照设计文档 §9 实现 Modal 的 scrim + 分层 Area 渲染。\n\n### 4a: 提取 render_overlay_content() 共享函数\n- 将 Frame 构建 + heading + render_sidebar_content 从 render_flyout 提取为独立函数\n- render_flyout 改为调用 render_overlay_content\n- Flyout 行为零变更\n\n### 4b: render_overlays 签名加 screen_width\n- 新增 screen_width: f32 参数\n- app.rs 调用处传入已有变量\n\n### 4c: Modal 分支渲染 scrim + content\n- scrim Area (modal_scrim): pos2(96,0), screen_w-96 × screen_h, scheme.scrim γ=0.5, allocate_painter + Sense::click() 关闭\n- content Area (modal_content): pos2(96,0), 300px 宽 × screen_h 高, 共用 render_overlay_content\n- 两个 Area 同为 Order::Foreground，scrim 先创建（低 z），content 后创建（高 z）\n- 均设 constrain(false)\n\n### 4d: 清理 handle_input 注释\n- 去掉\\\"scrim点击关闭将在render函数中处理\\\"的 todo 注释\n- 更新文档注释为\\\"Modal 的 Esc 关闭\\\"\n\n## 关闭方式\n\n| 方式 | 位置 |\n|------|------|\n| Esc 键 | handle_input |\n| 点击 scrim | render_overlays Modal 分支 scrim Area |\n\n## 编译\n\ncargo check 零警告"
+desc = "实现 Modal 的 scrim 半透明遮罩 + 分层 Area 渲染，点击 scrim / Esc 关闭"
+related_todos = [
+    "步骤 4: Modal 渲染（scrim + Area 覆盖层）",
+]
+
+[[sections]]
+number = "14"
+title = "修复：Modal scrim 不可见——Area fade_in 默认动画导致前几帧 opacity=0"
+created_at = "2026-07-22 23:08:09 UTC+8"
+modified_at = "2026-07-22 23:08:09 UTC+8"
+content = "## 根因\n\negui Area 首次创建时有默认 ~100ms fade_in 动画：\n- 第1帧：sizing_pass，内容丢弃\n- 第2帧：opacity≈0，Shape::Noop\n- 第3-6帧：opacity 渐进至 1.0\n\n导致点击触发 Modal 后前 100ms 完全看不到 scrim。\n\n## 修复\n\nscrim 和 modal_content 两个 Area 均加 `.fade_in(false)`，立即显示。\n\n## 同时修正\n\n- scrim 渲染从 `allocate_painter` 改为与 Flyout 一致的 `allocate_ui` 模式\n- scrim Area 显式加 `.interactable(true)`"
+desc = "Modal scrim 不可见是因为 Area 默认 fade_in 动画导致前几帧 opacity=0"
+related_todos = [
+    "步骤 4: Modal 渲染（scrim + Area 覆盖层）",
+]
+
+[[sections]]
+number = "15"
+title = "回滚 + 修复：scrim 不覆盖 statusbar，用 content_rect 替代 screen_h"
+created_at = "2026-07-22 23:39:38 UTC+8"
+modified_at = "2026-07-22 23:39:38 UTC+8"
+content = "## 变更\n\n- scrim/content Area 的 y 坐标从 `0.0` 改为 `content_rect.top()`\n- scrim/content Area 的高度从 `screen_h` 改为 `content_rect.height()`\n- 回滚单 Area 实验代码，恢复双 Area（scrim + content）\n- 去掉 `eprintln!` 调试\n- `content_rect` 已排除 bottom-statusbar 占位，scrim 不再覆盖状态栏\n\n## 验证\n\nModal 在窗口 <600px 时正常显示，点击 scrim / Esc 关闭，状态栏不受 scrim 遮挡。"
+desc = "回滚单 Area 实验代码，修复 scrim 使用 content_rect 不再覆盖 statusbar"
+related_todos = [
+    "步骤 4: Modal 渲染（scrim + Area 覆盖层）",
+]
+
+[[sections]]
+number = "16"
+title = "最终 UI 交互提案：2 态模型 (Pinned + Flyout) + 统一 scrim"
+created_at = "2026-07-23 00:21:46 UTC+8"
+modified_at = "2026-07-23 00:21:46 UTC+8"
+content = "## 模式（2 态）\n\n```\nPinned ─── inline Panel，占布局，扁平无阴影无圆角\nFlyout ─── overlay + scrim + 阴影 + 大圆角，不占布局\n```\n\nFlyout 是唯一 overlay 模式，删除 Modal，合并为一个模式。所有 Flyout 始终带 scrim。\n\n## 触发 + 关闭\n\n| | Hover 触发 | Click 触发 |\n|---|---|---|\n| 入口 | 鼠标停滞在 rail 上 180/300ms | 点击 rail |\n| 延迟 | Wide 180ms / Narrow 300ms | 无 |\n| 关闭 | 鼠标移出 area | Esc / scrim 点 / close_requested |\n| scrim | 始终有 | 始终有 |\n\n## 响应式三阶梯\n\n| 宽度 | 默认 | Hover 延迟 | Hover 行为 | Click 行为 |\n|------|------|-----------|-----------|-----------|\n| Wide (>=1000) | Pinned | 180ms | Hover Preview | Pin |\n| Medium (600~1000) | Hidden | 180ms | Flyout → 离开关闭 | Flyout → 不自动关 |\n| Narrow (<600) | Hidden | 300ms | Flyout → 离开关闭 | Flyout → 不自动关 |\n\n- 用户 Pin 后 is_user_pinned=true，跨阈值不切换\n- Pin 按钮未来实现在 Header\n\n## 关闭条件矩阵\n\n| | Esc | scrim 点击 | 鼠标离开 | close_requested |\n|---|---|---|---|---|\n| Hover 触发的 Flyout | yes | yes | yes | yes |\n| Click 触发的 Flyout | yes | yes | no | yes |\n\n## close_requested 预留\n\n```rust\n// SidebarState\npub close_requested: bool,  // 默认 false\n\n// handle_input\nif state.close_requested && state.mode.is_overlay() {\n    state.mode = SidebarMode::Hidden;\n    state.close_requested = false;\n}\n```\n\n只预留字段 + handle_input 处理，不接线。（未来 ListItem 点击设 close_requested = true 即可触发关闭）\n\n## 实现步骤\n\n### 4a（当前）：Merge Flyout/Modal + 统一 scrim\n\n| # | 文件 | 改动 |\n|---|------|------|\n| 1 | sidebar.rs 枚举 | 删 Modal(RailId) 变体 |\n| 2 | sidebar.rs impl | 删 is_modal()，is_overlay() 只匹 Flyout |\n| 3 | sidebar.rs render_overlays | Flyout 分支直接走 scrim+content（原 Modal 渲染） |\n| 4 | sidebar.rs render_overlays | 删 render_flyout 函数 |\n| 5 | sidebar.rs render_overlays | render_modal_overlay 改名/保留，作为唯一 overlay 渲染 |\n| 6 | sidebar.rs rail_click | Flyout + Modal 两臂合并为一臂 |\n| 7 | sidebar.rs update_hover | 不再区分为 Modal，统一设 Flyout |\n| 8 | sidebar.rs handle_input | is_modal() → is_overlay() |\n| 9 | app.rs | is_pinned 检查不变（Pinned 不受影响） |\n\n### 4b：close_requested 预留\n\n| # | 文件 | 改动 |\n|---|------|------|\n| 1 | sidebar.rs SidebarState | 新增 pub close_requested: bool |\n| 2 | sidebar.rs SidebarState::new | 初始化为 false |\n| 3 | sidebar.rs handle_input | if close_requested && is_overlay → Hidden |\n\n### 5（未来）：Hover 180/300ms + 离开关闭\n\n### 6（未来）：Pin/Unpin\n\n### 7（未来）：Hover Preview\n\n### 8（未来）：动画过渡"
+desc = "合并 Flyout/Modal 为单一 overlay 模式，始终带 scrim，Hover 延迟分宽窄屏"
+
 [[todo.items]]
 text = "组件拆分：material/{util,list_item,nav_rail_item,icon_button,ripple}.rs + sidebar.rs + app.rs 瘦身"
 completed = true
@@ -146,7 +187,7 @@ related_sections = [
 
 [[todo.items]]
 text = "步骤 4: Modal 渲染（scrim + Area 覆盖层）"
-completed = false
+completed = true
 related_sections = [
     "9",
     "12",

@@ -113,6 +113,7 @@ impl eframe::App for AppLayout {
             &mut self.sidebar_state,
             surface_color,
             content_rect,
+            screen_width,
             &mut self.list_sel_std,
             &mut self.list_sel_seg_0,
             &mut self.list_sel_seg_1,

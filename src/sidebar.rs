@@ -230,6 +230,7 @@ pub fn render_overlays(
     state: &mut SidebarState,
     surface_color: egui::Color32,
     content_rect: egui::Rect,
+    screen_width: f32,
     list_sel_std: &mut bool,
     list_sel_seg_0: &mut bool,
     list_sel_seg_1: &mut bool,
@@ -249,33 +250,69 @@ pub fn render_overlays(
             );
         }
         SidebarMode::Modal(rail) => {
-            render_flyout(
-                ctx,
-                rail,
-                surface_color,
-                content_rect,
-                list_sel_std,
-                list_sel_seg_0,
-                list_sel_seg_1,
-                list_sel_seg_2,
-            );
+            let scrim_color: egui::Color32 =
+                crate::material::color::access(|_p, s| s.scrim).into();
+
+            egui::Area::new(egui::Id::new("modal_scrim"))
+                .fixed_pos(egui::pos2(96.0, content_rect.top()))
+                .constrain(false)
+                .order(egui::Order::Foreground)
+                .interactable(true)
+                .fade_in(false)
+                .show(ctx, |ui| {
+                    let scrim_size =
+                        egui::vec2(screen_width - 96.0, content_rect.height());
+                    ui.allocate_ui(scrim_size, |ui| {
+                        ui.painter()
+                            .rect_filled(ui.max_rect(), 0.0, scrim_color.gamma_multiply(0.5));
+                        if ui
+                            .interact(
+                                ui.max_rect(),
+                                egui::Id::new("scrim_click"),
+                                egui::Sense::click(),
+                            )
+                            .clicked()
+                        {
+                            state.mode = SidebarMode::Hidden;
+                        }
+                    });
+                });
+
+            egui::Area::new(egui::Id::new("modal_content"))
+                .fixed_pos(egui::pos2(96.0, content_rect.top()))
+                .constrain(false)
+                .order(egui::Order::Foreground)
+                .interactable(true)
+                .fade_in(false)
+                .show(ctx, |ui| {
+                    ui.allocate_ui(egui::vec2(300.0, content_rect.height()), |ui| {
+                        render_overlay_content(
+                            ui,
+                            rail,
+                            surface_color,
+                            list_sel_std,
+                            list_sel_seg_0,
+                            list_sel_seg_1,
+                            list_sel_seg_2,
+                        );
+                    });
+                });
         }
         _ => {}
     }
 }
 
-fn render_flyout(
-    ctx: &egui::Context,
+fn render_overlay_content(
+    ui: &mut egui::Ui,
     rail: RailId,
     surface_color: egui::Color32,
-    content_rect: egui::Rect,
     list_sel_std: &mut bool,
     list_sel_seg_0: &mut bool,
     list_sel_seg_1: &mut bool,
     list_sel_seg_2: &mut bool,
 ) {
     let frame = egui::containers::Frame {
-        inner_margin: egui::Margin::symmetric(0, 4), // app.rs surface_frame
+        inner_margin: egui::Margin::symmetric(0, 4),
         outer_margin: egui::Margin::ZERO,
         corner_radius: egui::CornerRadius {
             nw: 0,
@@ -290,9 +327,34 @@ fn render_flyout(
             color: egui::Color32::from_black_alpha(60),
         },
         fill: surface_color,
-        stroke: egui::Stroke::NONE, // app.rs surface_frame
+        stroke: egui::Stroke::NONE,
     };
 
+    frame.show(ui, |ui| {
+        ui.style_mut().spacing.item_spacing = egui::Vec2::new(0.0, 0.0);
+        ui.heading(rail.title());
+        ui.add_space(4.);
+        render_sidebar_content(
+            ui,
+            list_sel_std,
+            list_sel_seg_0,
+            list_sel_seg_1,
+            list_sel_seg_2,
+        );
+        ui.add_space(ui.available_height());
+    });
+}
+
+fn render_flyout(
+    ctx: &egui::Context,
+    rail: RailId,
+    surface_color: egui::Color32,
+    content_rect: egui::Rect,
+    list_sel_std: &mut bool,
+    list_sel_seg_0: &mut bool,
+    list_sel_seg_1: &mut bool,
+    list_sel_seg_2: &mut bool,
+) {
     egui::Area::new(egui::Id::new("sidebar_flyout"))
         .fixed_pos(egui::pos2(96.0, content_rect.top()))
         .constrain(false)
@@ -300,19 +362,15 @@ fn render_flyout(
         .interactable(true)
         .show(ctx, |ui| {
             ui.allocate_ui(egui::vec2(300.0, content_rect.height()), |ui| {
-                frame.show(ui, |ui| {
-                    ui.style_mut().spacing.item_spacing = egui::Vec2::new(0.0, 0.0);
-                    ui.heading(rail.title());
-                    ui.add_space(4.);
-                    render_sidebar_content(
-                        ui,
-                        list_sel_std,
-                        list_sel_seg_0,
-                        list_sel_seg_1,
-                        list_sel_seg_2,
-                    );
-                    ui.add_space(ui.available_height());
-                });
+                render_overlay_content(
+                    ui,
+                    rail,
+                    surface_color,
+                    list_sel_std,
+                    list_sel_seg_0,
+                    list_sel_seg_1,
+                    list_sel_seg_2,
+                );
             });
         });
 }
@@ -460,14 +518,11 @@ pub fn apply_responsive_default(state: &mut SidebarState, screen_width: f32) {
     }
 }
 
-/// 输入 Event 处理（Modal 的 Esc / scrim 点击关闭）。
+/// 输入 Event 处理（Modal 的 Esc 关闭）。
 pub fn handle_input(ctx: &egui::Context, state: &mut SidebarState) {
-    // 处理Esc键关闭Modal
     if state.mode.is_modal() {
         if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
             state.mode = SidebarMode::Hidden;
         }
     }
-
-    // 注意：scrim点击关闭将在render函数中处理，因为需要Area的interact响应
 }
