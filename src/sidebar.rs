@@ -1,21 +1,15 @@
 //! 二级 List 响应式状态机。
 //!
-//! 基于 feedback.md 的 Pinned/Flyout/Modal 三态模型：
+//! 基于 feedback.md 的 Pinned/Flyout 二态模型：
 //! - Pinned(rail)  : 内联面板，扁平无阴影、无圆角，占布局。
-//! - Flyout(rail)  : Order::Foreground 悬浮层，阴影+大圆角，无 scrim。
-//! - Modal(rail)   : 悬浮层 + scrim 全屏半透明遮罩，Esc/点 scrim 关闭。
+//! - Flyout(rail)  : 悬浮层 + scrim + 阴影+大圆角，不占布局。
 //! - Hidden        : 二级 List 完全不渲染。
 //!
 //! 响应式三阶梯自动选默认：
 //! - Wide(>=1000)        : Pinned{pinned_rail}
 //! - Medium(600..1000)   : Hidden，Hover 触发 Flyout
-//! - Narrow(<600)        : Hidden，Rail 点击触发 Modal
+//! - Narrow(<600)        : Hidden，Rail 点击触发 Flyout
 //! 用户 Pin 按钮可覆盖自动默认；跨阈值仅在 auto 状态 (!is_user_pinned) 下改模式。
-//!
-//! Hover 防抖 180ms。动画 200ms quadratic_out。
-//! Preview 淡入 150ms。
-//!
-//! 本文件目前为骨架（拆分期），具体 P1/P2 实施时填充渲染与状态转换逻辑。
 
 use std::time::Instant;
 
@@ -58,8 +52,7 @@ pub enum SidebarMode {
     Flyout(RailId),
     /// 内联 Panel，占布局、扁平。
     Pinned(RailId),
-    /// 悬浮层 + 全屏 scrim；由 Narrow 屏幕 Rail 点击触发。
-    Modal(RailId),
+
 }
 
 impl SidebarMode {
@@ -67,18 +60,13 @@ impl SidebarMode {
     pub fn rail(self) -> Option<RailId> {
         match self {
             SidebarMode::Hidden => None,
-            SidebarMode::Flyout(r) | SidebarMode::Pinned(r) | SidebarMode::Modal(r) => Some(r),
+            SidebarMode::Flyout(r) | SidebarMode::Pinned(r) => Some(r),
         }
     }
 
-    /// 是否属于悬浮层渲染（Flyout / Modal）。
+    /// 是否属于悬浮层渲染（Flyout，始终带 scrim）。
     pub fn is_overlay(self) -> bool {
-        matches!(self, SidebarMode::Flyout(_) | SidebarMode::Modal(_))
-    }
-
-    /// 是否为 Modal（需要 scrim + Esc 关闭）。
-    pub fn is_modal(self) -> bool {
-        matches!(self, SidebarMode::Modal(_))
+        matches!(self, SidebarMode::Flyout(_))
     }
 }
 
@@ -115,6 +103,8 @@ pub struct SidebarState {
     pub hover_since: Option<Instant>,
     /// Pinned 模式下 Hover Preview 浮层的淡入 alpha（0..1）。
     pub preview_fade: f32,
+    /// 外部请求关闭 overlay（未来 ListItem 点击时设为 true）。
+    pub close_requested: bool,
 }
 
 impl SidebarState {
@@ -127,6 +117,7 @@ impl SidebarState {
             hover_rail: None,
             hover_since: None,
             preview_fade: 0.0,
+            close_requested: false,
         }
     }
 }
@@ -164,7 +155,7 @@ pub fn update_hover(
             // Medium屏幕：hover触发Flyout
             state.mode = SidebarMode::Flyout(rail);
         }
-    } else if state.mode.is_overlay() && !state.mode.is_modal() {
+    } else if state.mode.is_overlay() {
         // 鼠标离开且当前是Flyout模式，隐藏
         state.mode = SidebarMode::Hidden;
     }
@@ -179,13 +170,9 @@ pub fn rail_click(state: &mut SidebarState, rail: RailId, screen_width: f32) {
                 // Wide屏幕：切换到Pinned模式
                 state.mode = SidebarMode::Pinned(rail);
                 state.pinned_rail = rail;
-            } else if screen_width >= MEDIUM_MIN {
-                // Medium屏幕：切换到Flyout模式
-                state.mode = SidebarMode::Flyout(rail);
-                state.pinned_rail = rail;
             } else {
-                // Narrow屏幕：切换到Modal模式
-                state.mode = SidebarMode::Modal(rail);
+                // Medium/Narrow屏幕：切换到Flyout模式
+                state.mode = SidebarMode::Flyout(rail);
                 state.pinned_rail = rail;
             }
         }
@@ -209,16 +196,6 @@ pub fn rail_click(state: &mut SidebarState, rail: RailId, screen_width: f32) {
                 state.mode = SidebarMode::Flyout(rail);
             }
         }
-        SidebarMode::Modal(current_rail) => {
-            if current_rail == rail {
-                // 点击当前rail：隐藏Modal
-                state.mode = SidebarMode::Hidden;
-            } else {
-                // 点击其他rail：切换到该rail的Modal
-                state.pinned_rail = rail;
-                state.mode = SidebarMode::Modal(rail);
-            }
-        }
     }
 }
 
@@ -236,69 +213,54 @@ pub fn render_overlays(
     list_sel_seg_1: &mut bool,
     list_sel_seg_2: &mut bool,
 ) {
-    match state.mode {
-        SidebarMode::Flyout(rail) => {
-            render_flyout(
-                ctx,
-                rail,
-                surface_color,
-                content_rect,
-                list_sel_std,
-                list_sel_seg_0,
-                list_sel_seg_1,
-                list_sel_seg_2,
-            );
-        }
-        SidebarMode::Modal(rail) => {
-            let scrim_color: egui::Color32 =
-                crate::material::color::access(|_p, s| s.scrim).into();
+    if let SidebarMode::Flyout(rail) = state.mode {
+        let scrim_color: egui::Color32 =
+            crate::material::color::access(|_p, s| s.scrim).into();
 
-            egui::Area::new(egui::Id::new("modal_scrim"))
-                .fixed_pos(egui::pos2(96.0, content_rect.top()))
-                .constrain(false)
-                .order(egui::Order::Foreground)
-                .interactable(true)
-                .fade_in(false)
-                .show(ctx, |ui| {
-                    let scrim_size =
-                        egui::vec2(screen_width - 96.0, content_rect.height());
-                    ui.allocate_ui(scrim_size, |ui| {
-                        ui.painter()
-                            .rect_filled(ui.max_rect(), 0.0, scrim_color.gamma_multiply(0.5));
-                        if ui
-                            .interact(
-                                ui.max_rect(),
-                                egui::Id::new("scrim_click"),
-                                egui::Sense::click(),
-                            )
-                            .clicked()
-                        {
-                            state.mode = SidebarMode::Hidden;
-                        }
-                    });
+        egui::Area::new(egui::Id::new("sidebar_scrim"))
+            .fixed_pos(egui::pos2(96.0, content_rect.top()))
+            .constrain(false)
+            .order(egui::Order::Foreground)
+            .interactable(true)
+            .fade_in(false)
+            .show(ctx, |ui| {
+                let scrim_size =
+                    egui::vec2(screen_width - 96.0, content_rect.height());
+                ui.allocate_ui(scrim_size, |ui| {
+                    ui.painter()
+                        .rect_filled(ui.max_rect(), 0.0, scrim_color.gamma_multiply(0.5));
+                    if ui
+                        .interact(
+                            ui.max_rect(),
+                            egui::Id::new("scrim_click"),
+                            egui::Sense::click(),
+                        )
+                        .clicked()
+                    {
+                        state.mode = SidebarMode::Hidden;
+                    }
                 });
+            });
 
-            egui::Area::new(egui::Id::new("modal_content"))
-                .fixed_pos(egui::pos2(96.0, content_rect.top()))
-                .constrain(false)
-                .order(egui::Order::Foreground)
-                .interactable(true)
-                .fade_in(false)
-                .show(ctx, |ui| {
-                    ui.allocate_ui(egui::vec2(300.0, content_rect.height()), |ui| {
-                        render_overlay_content(
-                            ui,
-                            rail,
-                            surface_color,
-                            list_sel_std,
-                            list_sel_seg_0,
-                            list_sel_seg_1,
-                            list_sel_seg_2,
-                        );
-                    });
+        egui::Area::new(egui::Id::new("sidebar_flyout"))
+            .fixed_pos(egui::pos2(96.0, content_rect.top()))
+            .constrain(false)
+            .order(egui::Order::Foreground)
+            .interactable(true)
+            .fade_in(false)
+            .show(ctx, |ui| {
+                ui.allocate_ui(egui::vec2(300.0, content_rect.height()), |ui| {
+                    render_overlay_content(
+                        ui,
+                        rail,
+                        surface_color,
+                        list_sel_std,
+                        list_sel_seg_0,
+                        list_sel_seg_1,
+                        list_sel_seg_2,
+                    );
                 });
-        }
-        _ => {}
+            });
     }
 }
 
@@ -343,36 +305,6 @@ fn render_overlay_content(
         );
         ui.add_space(ui.available_height());
     });
-}
-
-fn render_flyout(
-    ctx: &egui::Context,
-    rail: RailId,
-    surface_color: egui::Color32,
-    content_rect: egui::Rect,
-    list_sel_std: &mut bool,
-    list_sel_seg_0: &mut bool,
-    list_sel_seg_1: &mut bool,
-    list_sel_seg_2: &mut bool,
-) {
-    egui::Area::new(egui::Id::new("sidebar_flyout"))
-        .fixed_pos(egui::pos2(96.0, content_rect.top()))
-        .constrain(false)
-        .order(egui::Order::Foreground)
-        .interactable(true)
-        .show(ctx, |ui| {
-            ui.allocate_ui(egui::vec2(300.0, content_rect.height()), |ui| {
-                render_overlay_content(
-                    ui,
-                    rail,
-                    surface_color,
-                    list_sel_std,
-                    list_sel_seg_0,
-                    list_sel_seg_1,
-                    list_sel_seg_2,
-                );
-            });
-        });
 }
 
 /// 渲染面板内容（Pinned 模式）。在 Panel::left 内部调用。
@@ -520,9 +452,10 @@ pub fn apply_responsive_default(state: &mut SidebarState, screen_width: f32) {
 
 /// 输入 Event 处理（Modal 的 Esc 关闭）。
 pub fn handle_input(ctx: &egui::Context, state: &mut SidebarState) {
-    if state.mode.is_modal() {
-        if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+    if state.mode.is_overlay() {
+        if state.close_requested || ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
             state.mode = SidebarMode::Hidden;
+            state.close_requested = false;
         }
     }
 }
