@@ -44,7 +44,7 @@ impl AppLayout {
             list_sel_seg_0: false,
             list_sel_seg_1: false,
             list_sel_seg_2: false,
-            sidebar_state: SidebarState::new(RailId::Files),
+            sidebar_state: SidebarState::new(Some(RailId::Files)),
         }
     }
 }
@@ -61,14 +61,14 @@ impl eframe::App for AppLayout {
             fill: surface_color,
             stroke: Stroke::NONE,
         };
-        // 状态栏
-        egui::Panel::bottom("bottom-statusbar")
-            .resizable(false)
-            .show(ui, bottom_statusbar);
         // 屏幕宽度（导航栏和侧边栏共用）
         let screen_width = ui
             .ctx()
             .input(|i| i.raw.screen_rect.map(|r| r.width()).unwrap_or(800.0));
+        // 状态栏
+        egui::Panel::bottom("bottom-statusbar")
+            .resizable(false)
+            .show(ui, |ui| bottom_statusbar(ui, &self.sidebar_state, screen_width));
         // 导航栏
         egui::Panel::left("navigation-rail")
             .frame(surface_frame)
@@ -89,7 +89,7 @@ impl eframe::App for AppLayout {
         sidebar::apply_responsive_default(&mut self.sidebar_state, screen_width);
         sidebar::handle_input(ui.ctx(), &mut self.sidebar_state);
 
-        let is_pinned = matches!(self.sidebar_state.mode, sidebar::SidebarMode::Pinned(_));
+        let is_pinned = matches!(self.sidebar_state.mode, sidebar::SidebarMode::Pinned);
         if is_pinned {
             egui::Panel::left("sidebar")
                 .frame(surface_frame)
@@ -158,9 +158,14 @@ impl eframe::App for AppLayout {
     }
 }
 
-fn bottom_statusbar(ui: &mut egui::Ui) {
+fn bottom_statusbar(ui: &mut egui::Ui, state: &sidebar::SidebarState, screen_width: f32) {
+    let mode_str = format!("{:?}", state.mode);
+    let active_str = state.active_rail.map_or("None".to_string(), |r| format!("{:?}", r));
+    let trigger_str = state.flyout_trigger.map_or("None".to_string(), |t| format!("{:?}", t));
     ui.horizontal(|ui| {
-        ui.heading("bottom_statusbar");
+        ui.label(format!(
+            "Mode: {mode_str}  Active: {active_str}  Trigger: {trigger_str}  Screen: {screen_width:.0}px"
+        ));
         if ui.button("test").clicked() {}
     });
 }
@@ -233,12 +238,15 @@ fn nav_rail(
         if sidebar_button(ui, sidebar_state, RailId::Help, screen_width) {
             hovered_rail = Some(RailId::Help);
         }
-        sidebar::update_hover(
+        let now = std::time::Instant::now();
+        if let Some(delay) = sidebar::update_hover(
             sidebar_state,
             hovered_rail,
-            std::time::Instant::now(),
+            now,
             screen_width,
-        );
+        ) {
+            ui.ctx().request_repaint_after(delay);
+        }
     });
 }
 
@@ -248,7 +256,7 @@ fn sidebar_button(
     rail: RailId,
     screen_width: f32,
 ) -> bool {
-    let active = state.mode.rail() == Some(rail);
+    let active = state.active_rail == Some(rail);
     let resp = NavRailItem::new(
         format!("sidebar_btn_{:?}", rail).as_str(),
         rail.title(),

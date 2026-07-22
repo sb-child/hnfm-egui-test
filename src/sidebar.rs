@@ -1,15 +1,16 @@
 //! 二级 List 响应式状态机。
 //!
 //! 基于 feedback.md 的 Pinned/Flyout 二态模型：
-//! - Pinned(rail)  : 内联面板，扁平无阴影、无圆角，占布局。
-//! - Flyout(rail)  : 悬浮层 + scrim + 阴影+大圆角，不占布局。
-//! - Hidden        : 二级 List 完全不渲染。
+//! - Pinned  : 内联面板，扁平无阴影、无圆角，占布局。
+//! - Flyout  : 悬浮层 + scrim + 阴影+大圆角，不占布局。
+//! - Hidden  : 二级 List 完全不渲染。
+//!
+//! active_rail 独立于 mode，点击切换 rail 不受模式切换影响。
 //!
 //! 响应式三阶梯自动选默认：
-//! - Wide(>=1000)        : Pinned{pinned_rail}
+//! - Wide(>=1000)        : Pinned
 //! - Medium(600..1000)   : Hidden，Hover 触发 Flyout
 //! - Narrow(<600)        : Hidden，Rail 点击触发 Flyout
-//! 用户 Pin 按钮可覆盖自动默认；跨阈值仅在 auto 状态 (!is_user_pinned) 下改模式。
 
 use std::time::Instant;
 
@@ -24,8 +25,6 @@ pub enum FlyoutTrigger {
 }
 
 /// 应用中的板块 id（demo 板块）。
-/// 现有 NavRail 测试态（theme_toggle/theme_switch/opt_* 等）保留不动，
-/// 此处仅描述 4 个新的二级 List demo 板块。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RailId {
     Files,
@@ -46,47 +45,25 @@ impl RailId {
     }
 }
 
-/// 二级 List 当前渲染形态。
-///
-/// 设计上区分「模式」与「Pinned 目标」：
-/// 模式决定渲染层（Panel / Area / Area+scrim / 不渲染），
-/// `pinned_rail` 决定 Pinned 模式回退目标，且 Hover Preview 切换时仅改 pinned_rail。
+/// 渲染模式（纯模式，不含 rail 数据）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SidebarMode {
-    /// 不渲染二级 List。
     Hidden,
-    /// 悬浮层，无 scrim；只能由 Hover(180ms) 触发。
-    Flyout(RailId),
-    /// 内联 Panel，占布局、扁平。
-    Pinned(RailId),
-
+    Flyout,
+    Pinned,
 }
 
 impl SidebarMode {
-    /// 当前激活的 rail（若不处于 Hidden）。
-    pub fn rail(self) -> Option<RailId> {
-        match self {
-            SidebarMode::Hidden => None,
-            SidebarMode::Flyout(r) | SidebarMode::Pinned(r) => Some(r),
-        }
-    }
-
-    /// 是否属于悬浮层渲染（Flyout，始终带 scrim）。
     pub fn is_overlay(self) -> bool {
-        matches!(self, SidebarMode::Flyout(_))
+        matches!(self, SidebarMode::Flyout)
     }
 }
 
-/// 响应式阈值（screen_rect().width()）。
 const WIDE_MIN: f32 = 1000.0;
-#[allow(dead_code)]
 const MEDIUM_MIN: f32 = 600.0;
 
-/// Hover 防抖延迟（ms）。
 pub const HOVER_DELAY_MS: u64 = 180;
 
-/// Hover 防抖判定：是否触发 Flyout / Preview。
-#[allow(dead_code)]
 fn hover_exceeded(since: Option<Instant>, delay_ms: u64) -> bool {
     match since {
         Some(t) => t.elapsed().as_millis() as u64 >= delay_ms,
@@ -94,34 +71,32 @@ fn hover_exceeded(since: Option<Instant>, delay_ms: u64) -> bool {
     }
 }
 
+/// Flyout 渲染时使用的 rail：hover 触发的用 hover_rail，其它情况用 active_rail。
+fn flyout_rail(state: &SidebarState) -> Option<RailId> {
+    match state.flyout_trigger {
+        Some(FlyoutTrigger::Hover) => state.hover_rail.or(state.active_rail),
+        _ => state.active_rail,
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct SidebarState {
-    /// 当前渲染模式。
     pub mode: SidebarMode,
-    /// 自动选默认时的初始 rail（Wide 默认 Pinned 用的目标）。
-    pub default_rail: RailId,
-    /// 当前被 Pinned 的板块（Hover Preview 切换时改这个）。
-    pub pinned_rail: RailId,
-    /// 用户是否手动 Pin/Unpin 过；为 true 时跨响应式阈值不再自动切换模式。
+    /// 用户选中的 panel（点击切换时更新，不受模式影响）。
+    pub active_rail: Option<RailId>,
     pub is_user_pinned: bool,
-    /// 当前悬停的 rail（用于防抖计数）。
     pub hover_rail: Option<RailId>,
-    /// 悬停开始时刻。
     pub hover_since: Option<Instant>,
-    /// Pinned 模式下 Hover Preview 浮层的淡入 alpha（0..1）。
     pub preview_fade: f32,
-    /// 外部请求关闭 overlay（未来 ListItem 点击时设为 true）。
     pub close_requested: bool,
-    /// Flyout 触发方式（Click 不自动关，Hover 离开即关）。
     pub flyout_trigger: Option<FlyoutTrigger>,
 }
 
 impl SidebarState {
-    pub fn new(default_rail: RailId) -> Self {
+    pub fn new(active_rail: Option<RailId>) -> Self {
         Self {
             mode: SidebarMode::Hidden,
-            default_rail,
-            pinned_rail: default_rail,
+            active_rail,
             is_user_pinned: false,
             hover_rail: None,
             hover_since: None,
@@ -132,23 +107,31 @@ impl SidebarState {
     }
 }
 
-/// 根据屏幕宽度给出响应式默认模式（未涉及用户手动 Pin）。
-pub fn responsive_default(rail: RailId, screen_width: f32) -> SidebarMode {
+pub fn responsive_default(screen_width: f32) -> SidebarMode {
     if screen_width >= WIDE_MIN {
-        SidebarMode::Pinned(rail)
+        SidebarMode::Pinned
     } else {
         SidebarMode::Hidden
     }
 }
 
-/// Hover 防抖状态更新：180ms(>=600) / 300ms(<600) 延迟后触发 Flyout。
-/// 离开 rail 不清除 flyout——check_flyout_leave 负责判断鼠标是否完全离开联合区域。
+/// Hover 防抖状态更新。返回 None 无需重绘，Some(dur) 在 dur 后重绘。
 pub fn update_hover(
     state: &mut SidebarState,
     hovered_rail: Option<RailId>,
     now: Instant,
     screen_width: f32,
-) {
+) -> Option<std::time::Duration> {
+    if screen_width >= WIDE_MIN {
+        return None;
+    }
+
+    let is_click_flyout = state.mode == SidebarMode::Flyout
+        && state.flyout_trigger == Some(FlyoutTrigger::Click);
+    if is_click_flyout {
+        return None;
+    }
+
     let delay_ms = if screen_width < MEDIUM_MIN {
         300
     } else {
@@ -160,54 +143,50 @@ pub fn update_hover(
         state.hover_since = hovered_rail.map(|_| now);
     }
 
-    if let Some(rail) = hovered_rail {
-        if hover_exceeded(state.hover_since, delay_ms)
-            && screen_width < WIDE_MIN
-            && !matches!(state.mode, SidebarMode::Pinned(_))
-        {
-            state.mode = SidebarMode::Flyout(rail);
+    if hovered_rail.is_some() {
+        if hover_exceeded(state.hover_since, delay_ms) {
+            state.mode = SidebarMode::Flyout;
             state.flyout_trigger = Some(FlyoutTrigger::Hover);
+        } else if let Some(since) = state.hover_since {
+            let elapsed = since.elapsed().as_millis() as u64;
+            if elapsed < delay_ms {
+                return Some(std::time::Duration::from_millis(delay_ms - elapsed));
+            }
         }
     }
+
+    None
 }
 
-/// Rail 点击触发的模式切换。
 pub fn rail_click(state: &mut SidebarState, rail: RailId, screen_width: f32) {
+    let same_rail = state.active_rail == Some(rail);
+    state.active_rail = Some(rail);
+
     match state.mode {
         SidebarMode::Hidden => {
             if screen_width >= WIDE_MIN {
-                state.mode = SidebarMode::Pinned(rail);
-                state.pinned_rail = rail;
+                state.mode = SidebarMode::Pinned;
             } else {
-                state.mode = SidebarMode::Flyout(rail);
-                state.pinned_rail = rail;
+                state.mode = SidebarMode::Flyout;
                 state.flyout_trigger = Some(FlyoutTrigger::Click);
             }
         }
-        SidebarMode::Pinned(current_rail) => {
-            if current_rail == rail {
+        SidebarMode::Pinned => {
+            if same_rail {
                 state.mode = SidebarMode::Hidden;
-            } else {
-                state.pinned_rail = rail;
-                state.mode = SidebarMode::Pinned(rail);
             }
         }
-        SidebarMode::Flyout(current_rail) => {
-            if current_rail == rail {
+        SidebarMode::Flyout => {
+            if same_rail {
                 state.mode = SidebarMode::Hidden;
                 state.flyout_trigger = None;
             } else {
-                state.pinned_rail = rail;
-                state.mode = SidebarMode::Flyout(rail);
                 state.flyout_trigger = Some(FlyoutTrigger::Click);
             }
         }
     }
 }
 
-/// 渲染分发：根据 state.mode 调度 Pinned Panel / Flyout Area / Modal Area+scrim。
-
-/// 渲染覆盖层（Flyout / Modal）。每帧调用，不需 Panel。
 pub fn render_overlays(
     ctx: &egui::Context,
     state: &mut SidebarState,
@@ -219,56 +198,61 @@ pub fn render_overlays(
     list_sel_seg_1: &mut bool,
     list_sel_seg_2: &mut bool,
 ) {
-    if let SidebarMode::Flyout(rail) = state.mode {
-        let scrim_color: egui::Color32 =
-            crate::material::color::access(|_p, s| s.scrim).into();
-
-        egui::Area::new(egui::Id::new("sidebar_scrim"))
-            .fixed_pos(egui::pos2(96.0, content_rect.top()))
-            .constrain(false)
-            .order(egui::Order::Foreground)
-            .interactable(true)
-            .fade_in(false)
-            .show(ctx, |ui| {
-                let scrim_size =
-                    egui::vec2(screen_width - 96.0, content_rect.height());
-                ui.allocate_ui(scrim_size, |ui| {
-                    ui.painter()
-                        .rect_filled(ui.max_rect(), 0.0, scrim_color.gamma_multiply(0.5));
-                    if ui
-                        .interact(
-                            ui.max_rect(),
-                            egui::Id::new("scrim_click"),
-                            egui::Sense::click(),
-                        )
-                        .clicked()
-                    {
-                        state.mode = SidebarMode::Hidden;
-                        state.flyout_trigger = None;
-                    }
-                });
-            });
-
-        egui::Area::new(egui::Id::new("sidebar_flyout"))
-            .fixed_pos(egui::pos2(96.0, content_rect.top()))
-            .constrain(false)
-            .order(egui::Order::Foreground)
-            .interactable(true)
-            .fade_in(false)
-            .show(ctx, |ui| {
-                ui.allocate_ui(egui::vec2(300.0, content_rect.height()), |ui| {
-                    render_overlay_content(
-                        ui,
-                        rail,
-                        surface_color,
-                        list_sel_std,
-                        list_sel_seg_0,
-                        list_sel_seg_1,
-                        list_sel_seg_2,
-                    );
-                });
-            });
+    if state.mode != SidebarMode::Flyout {
+        return;
     }
+    let rail = match flyout_rail(state) {
+        Some(r) => r,
+        None => return,
+    };
+
+    let scrim_color: egui::Color32 =
+        crate::material::color::access(|_p, s| s.scrim).into();
+
+    egui::Area::new(egui::Id::new("sidebar_scrim"))
+        .fixed_pos(egui::pos2(96.0, content_rect.top()))
+        .constrain(false)
+        .order(egui::Order::Foreground)
+        .interactable(true)
+        .fade_in(false)
+        .show(ctx, |ui| {
+            let scrim_size = egui::vec2(screen_width - 96.0, content_rect.height());
+            ui.allocate_ui(scrim_size, |ui| {
+                ui.painter()
+                    .rect_filled(ui.max_rect(), 0.0, scrim_color.gamma_multiply(0.5));
+                if ui
+                    .interact(
+                        ui.max_rect(),
+                        egui::Id::new("scrim_click"),
+                        egui::Sense::click(),
+                    )
+                    .clicked()
+                {
+                    state.mode = SidebarMode::Hidden;
+                    state.flyout_trigger = None;
+                }
+            });
+        });
+
+    egui::Area::new(egui::Id::new("sidebar_flyout"))
+        .fixed_pos(egui::pos2(96.0, content_rect.top()))
+        .constrain(false)
+        .order(egui::Order::Foreground)
+        .interactable(true)
+        .fade_in(false)
+        .show(ctx, |ui| {
+            ui.allocate_ui(egui::vec2(300.0, content_rect.height()), |ui| {
+                render_overlay_content(
+                    ui,
+                    rail,
+                    surface_color,
+                    list_sel_std,
+                    list_sel_seg_0,
+                    list_sel_seg_1,
+                    list_sel_seg_2,
+                );
+            });
+        });
 }
 
 fn render_overlay_content(
@@ -314,7 +298,7 @@ fn render_overlay_content(
     });
 }
 
-/// 渲染面板内容（Pinned 模式）。在 Panel::left 内部调用。
+/// 渲染面板内容（Pinned 模式）。
 pub fn render_pinned(
     ui: &mut egui::Ui,
     state: &SidebarState,
@@ -323,22 +307,27 @@ pub fn render_pinned(
     list_sel_seg_1: &mut bool,
     list_sel_seg_2: &mut bool,
 ) {
-    if let SidebarMode::Pinned(rail) = state.mode {
-        ui.set_width(300.0);
-        ui.style_mut().spacing.item_spacing = egui::Vec2::new(0.0, 0.0);
-        ui.heading(rail.title());
-        ui.add_space(4.);
-        render_sidebar_content(
-            ui,
-            list_sel_std,
-            list_sel_seg_0,
-            list_sel_seg_1,
-            list_sel_seg_2,
-        );
+    if state.mode != SidebarMode::Pinned {
+        return;
     }
+    let rail = match state.active_rail {
+        Some(r) => r,
+        None => return,
+    };
+
+    ui.set_width(300.0);
+    ui.style_mut().spacing.item_spacing = egui::Vec2::new(0.0, 0.0);
+    ui.heading(rail.title());
+    ui.add_space(4.);
+    render_sidebar_content(
+        ui,
+        list_sel_std,
+        list_sel_seg_0,
+        list_sel_seg_1,
+        list_sel_seg_2,
+    );
 }
 
-/// 渲染sidebar内容（可复用）
 fn render_sidebar_content(
     ui: &mut egui::Ui,
     list_sel_std: &mut bool,
@@ -431,33 +420,21 @@ fn render_sidebar_content(
     });
 }
 
-/// 自动应用响应式默认（每帧调用，跨阈值仅在 auto 状态下改模式）。
 pub fn apply_responsive_default(state: &mut SidebarState, screen_width: f32) {
-    // 用户手动Pin过，不自动切换
     if state.is_user_pinned {
         return;
     }
-
-    // 获取当前屏幕宽度对应的默认模式
-    let new_default = responsive_default(state.pinned_rail, screen_width);
-
-    // 只在auto模式下重置（用户未手动Pin）
-    // 检查当前模式是否需要更新
-    let should_update = match (state.mode, new_default) {
-        // 当前Hidden，但屏幕宽度应该显示Pinned
-        (SidebarMode::Hidden, SidebarMode::Pinned(_)) => true,
-        // 当前Pinned，但屏幕宽度应该Hidden
-        (SidebarMode::Pinned(_), SidebarMode::Hidden) => true,
-        // 其他情况不更新
-        _ => false,
-    };
-
-    if should_update {
+    let new_default = responsive_default(screen_width);
+    if state.mode != new_default
+        && !matches!(
+            (state.mode, new_default),
+            (SidebarMode::Flyout, _) | (_, SidebarMode::Flyout)
+        )
+    {
         state.mode = new_default;
     }
 }
 
-/// 输入 Event 处理（Modal 的 Esc 关闭）。
 pub fn handle_input(ctx: &egui::Context, state: &mut SidebarState) {
     if state.mode.is_overlay() {
         if state.close_requested || ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
