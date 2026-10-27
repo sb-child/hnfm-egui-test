@@ -1,7 +1,9 @@
 use egui::Stroke;
 
 use crate::material::color::ThemeVariant;
-use crate::material::components::{ButtonShape, ButtonSize, ButtonVariant, ButtonWidth, CardWidth};
+use crate::material::components::{
+    ButtonShape, ButtonSize, ButtonVariant, ButtonWidth, CardWidth, TextWrap,
+};
 use crate::{fonts, material};
 
 pub struct AppLayout {
@@ -87,6 +89,19 @@ fn content(m: &mut material::M3Ui<'_>, demo_clicks: &mut u32) {
                 m.button("btn_m", "M").size(ButtonSize::M).show(m);
                 m.button("btn_square", "方角")
                     .shape(ButtonShape::Square)
+                    .show(m);
+            });
+
+            m.horizontal_wrapped(|m| {
+                m.button("btn_wrap", "多行按钮文本，用来验证 wrapText 的高度")
+                    .width(ButtonWidth::Fixed(160.0))
+                    .text_wrap(TextWrap::MultiLine)
+                    .show(m);
+                m.button("btn_reserve", "保存")
+                    .reserve_text("保存中...")
+                    .show(m);
+                m.button("btn_max", "Hug 最大宽度限制")
+                    .maximum_width(120.0)
                     .show(m);
             });
 

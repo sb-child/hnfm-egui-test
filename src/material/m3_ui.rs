@@ -6,7 +6,7 @@
 use egui::{InnerResponse, Ui};
 
 use crate::material::components::{Button, Card};
-use crate::material::motion::MotionPrefs;
+use crate::material::effects::MotionPrefs;
 use crate::material::theme::Theme;
 
 pub struct M3Ui<'a> {

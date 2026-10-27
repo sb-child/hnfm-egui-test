@@ -1,14 +1,14 @@
 //! M3 按钮。
 //!
 //! 来源:
-//! - [`DButton.qml`](https://github.com/duxlabs-dev/dux-qml-common/blob/c6e4a6bce24b804688225b0889410d2ec0ae06d7/DCommon/Widgets/DButton.qml): 尺寸、内边距、图标尺寸。
+//! - [`DButton.qml`](https://github.com/duxlabs-dev/dux-qml-common/blob/c6e4a6bce24b804688225b0889410d2ec0ae06d7/DCommon/Widgets/DButton.qml): 尺寸、内边距、最大宽、换行、预留文本。
 //! - [`Style.qml`](https://github.com/duxlabs-dev/dux-qml-common/blob/c6e4a6bce24b804688225b0889410d2ec0ae06d7/DCommon/Common/Style.qml): 按钮高度、最小宽度、state layer。
 //! - [`Shape.js`](https://github.com/duxlabs-dev/dux-qml-common/blob/c6e4a6bce24b804688225b0889410d2ec0ae06d7/DCommon/Common/Shape.js): 按钮圆角计算。
 //! - [`StateLayer.qml`](https://github.com/duxlabs-dev/dux-qml-common/blob/c6e4a6bce24b804688225b0889410d2ec0ae06d7/DCommon/Widgets/StateLayer.qml): state color。
 //! - [`SHAPES.md`](https://github.com/duxlabs-dev/dux-qml-common/blob/c6e4a6bce24b804688225b0889410d2ec0ae06d7/SHAPES.md): 按钮圆角基线。
 //! - [`buttons/specs`](https://m3.material.io/components/buttons/specs): 变体颜色映射。
 //!
-//! `.ui()` 返回 [`Hit`]；图标目前使用文本字形。
+//! `.show()` 返回 [`Hit`]；图标目前使用文本字形。
 
 use std::sync::Arc;
 
@@ -19,14 +19,15 @@ use egui::{
 
 use crate::fonts::ff_sans;
 use crate::material::Scheme;
+use crate::material::effects::interpolate;
+use crate::material::effects::motion::{self, Motion, MotionPrefs};
+use crate::material::effects::state_layer;
 use crate::material::interact::{Hit, hit_rounded};
 use crate::material::m3_ui::M3Ui;
-use crate::material::motion::{self, Motion, MotionPrefs};
-use crate::material::state_layer;
+pub use crate::material::text::TextWrap;
 use crate::material::text::{self, TextLayout, TextStyle};
 use crate::material::theme::Theme;
 use crate::material::tokens;
-use crate::material::util;
 
 /// 按钮的视觉变体。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -57,31 +58,36 @@ impl ButtonSize {
             Self::M => tokens::BUTTON_HEIGHT_M,
         }
     }
+}
 
-    /// 来源: `DButton.qml` 的 `horizontalPadding`。
-    fn horizontal_padding(self) -> f32 {
-        match self {
-            Self::Xxs | Self::Xs => tokens::SPACING_M,
-            Self::S => tokens::SPACING_L,
-            Self::M => tokens::SPACING_XL,
-        }
+/// 来源: `DButton.qml` 的 `horizontalPadding`。
+fn horizontal_padding_for_height(height: f32) -> f32 {
+    if height <= tokens::BUTTON_HEIGHT_XS {
+        tokens::SPACING_M
+    } else if height <= tokens::BUTTON_HEIGHT_S {
+        tokens::SPACING_L
+    } else {
+        tokens::SPACING_XL
     }
+}
 
-    /// 来源: `DButton.qml` 的 `contentRow.spacing`。
-    fn content_spacing(self) -> f32 {
-        match self {
-            Self::Xxs | Self::Xs => tokens::SPACING_XS,
-            Self::S | Self::M => tokens::SPACING_S,
-        }
+/// 来源: `DButton.qml` 的 `contentRow.spacing`。
+fn content_spacing_for_height(height: f32) -> f32 {
+    if height <= tokens::BUTTON_HEIGHT_XS {
+        tokens::SPACING_XS
+    } else if height <= tokens::BUTTON_HEIGHT_M {
+        tokens::SPACING_S
+    } else {
+        tokens::SPACING_M
     }
+}
 
-    /// 来源: `DButton.qml` 的 `iconSize`。
-    fn icon_size(self) -> f32 {
-        if self.height() <= tokens::BUTTON_HEIGHT_S {
-            tokens::ICON_SIZE_MEDIUM
-        } else {
-            tokens::ICON_SIZE
-        }
+/// 来源: `DButton.qml` 的 `iconSize`。
+fn icon_size_for_height(height: f32) -> f32 {
+    if height <= tokens::BUTTON_HEIGHT_S {
+        tokens::ICON_SIZE_MEDIUM
+    } else {
+        tokens::ICON_SIZE
     }
 }
 
@@ -101,7 +107,7 @@ pub enum ButtonShape {
 /// 宽度策略。
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ButtonWidth {
-    /// 内容宽度加两侧 padding，并保证不小于 `BUTTON_MIN_WIDTH`。
+    /// 内容宽度加两侧 padding，并且不小于 `minimum_width`、不大于 `maximum_width`。
     Hug,
     /// 占满当前可用宽度。
     Fill,
@@ -130,8 +136,15 @@ pub struct Button<'a> {
     icon: Option<&'a str>,
     variant: ButtonVariant,
     size: ButtonSize,
+    height: Option<f32>,
+    minimum_width: f32,
+    horizontal_padding: Option<f32>,
+    icon_size: Option<f32>,
     shape: ButtonShape,
     width: ButtonWidth,
+    maximum_width: f32,
+    reserve_text: Option<&'a str>,
+    text_wrap: TextWrap,
     enabled: bool,
     motion: Option<MotionPrefs>,
 }
@@ -144,8 +157,15 @@ impl<'a> Button<'a> {
             icon: None,
             variant: ButtonVariant::Filled,
             size: ButtonSize::S,
+            height: None,
+            minimum_width: tokens::BUTTON_MIN_WIDTH,
+            horizontal_padding: None,
+            icon_size: None,
             shape: ButtonShape::Round,
             width: ButtonWidth::Hug,
+            maximum_width: f32::INFINITY,
+            reserve_text: None,
+            text_wrap: TextWrap::SingleLine,
             enabled: true,
             motion: None,
         }
@@ -161,6 +181,31 @@ impl<'a> Button<'a> {
         self
     }
 
+    /// 覆盖高度。padding、spacing、icon size 的默认值会按新高度重算。
+    /// 来源: `DButton.qml` 的 `buttonHeight`。
+    pub fn height(mut self, height: f32) -> Self {
+        self.height = Some(height.max(0.0));
+        self
+    }
+
+    /// Hug 宽度的最小宽度。来源: `DButton.qml` 的 `minimumWidth`。
+    pub fn minimum_width(mut self, width: f32) -> Self {
+        self.minimum_width = width.max(0.0);
+        self
+    }
+
+    /// 覆盖水平内边距。来源: `DButton.qml` 的 `horizontalPadding`。
+    pub fn horizontal_padding(mut self, padding: f32) -> Self {
+        self.horizontal_padding = Some(padding.max(0.0));
+        self
+    }
+
+    /// 覆盖图标尺寸。来源: `DButton.qml` 的 `iconSize`。
+    pub fn icon_size(mut self, size: f32) -> Self {
+        self.icon_size = Some(size.max(0.0));
+        self
+    }
+
     pub fn shape(mut self, shape: ButtonShape) -> Self {
         self.shape = shape;
         self
@@ -171,8 +216,28 @@ impl<'a> Button<'a> {
         self
     }
 
+    /// Hug 宽度的上限。Fill / Fixed 不受影响。
+    /// 来源: `DButton.qml` 的 `maximumWidth`。
+    pub fn maximum_width(mut self, width: f32) -> Self {
+        self.maximum_width = width.max(0.0);
+        self
+    }
+
     pub fn icon(mut self, icon: &'a str) -> Self {
         self.icon = Some(icon);
+        self
+    }
+
+    /// 预留文本宽度，避免 label 变化时按钮宽度跳动。
+    /// 来源: `DButton.qml` 的 `reserveText`。
+    pub fn reserve_text(mut self, text: &'a str) -> Self {
+        self.reserve_text = Some(text);
+        self
+    }
+
+    /// 文本换行策略。来源: `DButton.qml` 的 `wrapText`。
+    pub fn text_wrap(mut self, wrap: TextWrap) -> Self {
+        self.text_wrap = wrap;
         self
     }
 
@@ -197,27 +262,26 @@ impl<'a> Button<'a> {
     fn show_in(self, ui: &mut Ui, theme: &Theme, prefs: MotionPrefs) -> Hit {
         let enabled = self.enabled && ui.is_enabled();
         let metrics = self.measure(ui);
-        let width = self.resolve_width(ui, &metrics);
-        let (_, rect) = ui.allocate_space(Vec2::new(width, metrics.height));
+        let (_, rect) = ui.allocate_space(Vec2::new(metrics.width, metrics.height));
 
         // 命中用 rest 圆角；按压时视觉圆角变化不影响命中区域。
         let radius_rest = match self.shape {
-            ButtonShape::Round => tokens::full_radius(width, metrics.height),
-            ButtonShape::Square => tokens::button_radius(metrics.height, false),
+            ButtonShape::Round => tokens::full_radius(metrics.width, metrics.height),
+            ButtonShape::Square => tokens::button_radius(metrics.button_height, false),
         };
-        let radius_pressed = tokens::button_radius(metrics.height, true);
+        let radius_pressed = tokens::button_radius(metrics.button_height, true);
 
         let id = Id::unique(self.key);
         let hit = hit_rounded(ui, id, rect, radius_rest, enabled);
 
         let colors = button_colors(theme.scheme(), self.variant, enabled);
         let anim = transitions(ui, id, &hit, enabled, prefs);
-        let radius = util::lerp_corner_radius(radius_rest, radius_pressed, anim.shape);
+        let radius = interpolate::lerp_corner_radius(radius_rest, radius_pressed, anim.shape);
         let layer_alpha = state_layer::alpha(anim.hover, anim.press, anim.focus);
 
         let painter = ui.painter();
         paint_surface(painter, rect, radius, &colors, layer_alpha);
-        self.paint_content(ui, painter, rect, width, &metrics, &colors);
+        self.paint_content(painter, rect, &metrics, &colors);
         if hit.focused() {
             paint_focus_ring(painter, rect, radius, &colors);
         }
@@ -225,40 +289,96 @@ impl<'a> Button<'a> {
         hit
     }
 
-    /// 测量 Hug 宽度。返回的 galley 在绘制阶段可复用。
-    fn measure(&self, ui: &Ui) -> ButtonMetrics {
-        let height = self.size.height();
-        let padding = self.size.horizontal_padding();
-        let spacing = self.size.content_spacing();
-        let icon_size = self.size.icon_size();
+    fn spec(&self) -> ButtonSpec {
+        let height = self.height.unwrap_or_else(|| self.size.height());
+        ButtonSpec {
+            height,
+            padding: self
+                .horizontal_padding
+                .unwrap_or_else(|| horizontal_padding_for_height(height)),
+            spacing: content_spacing_for_height(height),
+            icon_size: self
+                .icon_size
+                .unwrap_or_else(|| icon_size_for_height(height)),
+            min_width: self.minimum_width,
+        }
+    }
 
-        let label = text::layout_text(
+    /// 先按自然文本算宽度，再用最终宽度排版 label。
+    fn measure(&self, ui: &Ui) -> ButtonMetrics {
+        let spec = self.spec();
+        let natural_label = text::layout_text(
             ui,
             self.label,
             TextLayout::single_line(TextStyle::BUTTON, f32::INFINITY),
         );
+        let reserved_width = self.reserve_text.map_or(0.0, |text| {
+            text::layout_text(
+                ui,
+                text,
+                TextLayout::single_line(TextStyle::BUTTON, f32::INFINITY),
+            )
+            .size()
+            .x
+        });
         let icon_width = if self.icon.is_some() {
-            icon_size + spacing
+            spec.icon_size + spec.spacing
         } else {
             0.0
         };
-        let content_width = label.size().x + icon_width;
+        let desired_label_width = natural_label.size().x.max(reserved_width);
+
+        let width = self.resolve_width(ui, desired_label_width + icon_width, &spec);
+        let label_max_width = (width - spec.padding * 2.0 - icon_width).max(0.0);
+        let label_box_width = desired_label_width.min(label_max_width);
+
+        let label = match self.text_wrap {
+            TextWrap::SingleLine => {
+                if natural_label.size().x <= label_box_width {
+                    natural_label
+                } else {
+                    text::layout_text(
+                        ui,
+                        self.label,
+                        TextLayout::single_line(TextStyle::BUTTON, label_box_width),
+                    )
+                }
+            }
+            TextWrap::MultiLine => text::layout_text(
+                ui,
+                self.label,
+                TextLayout::multi_line(TextStyle::BUTTON, label_box_width),
+            ),
+        };
+
+        let content_height = if self.icon.is_some() {
+            spec.icon_size
+        } else {
+            0.0
+        }
+        .max(label.size().y);
+        let height = match self.text_wrap {
+            TextWrap::SingleLine => spec.height,
+            TextWrap::MultiLine => spec.height.max(content_height + tokens::SPACING_S * 2.0),
+        };
 
         ButtonMetrics {
+            width,
             height,
-            padding,
-            spacing,
-            icon_size,
+            button_height: spec.height,
+            spacing: spec.spacing,
+            icon_size: spec.icon_size,
             icon_width,
-            content_width,
+            label_width: label_box_width,
             label,
         }
     }
 
-    fn resolve_width(&self, ui: &Ui, metrics: &ButtonMetrics) -> f32 {
+    fn resolve_width(&self, ui: &Ui, content_width: f32, spec: &ButtonSpec) -> f32 {
         match self.width {
             ButtonWidth::Hug => {
-                (metrics.content_width + metrics.padding * 2.0).max(tokens::BUTTON_MIN_WIDTH)
+                let width = (content_width + spec.padding * 2.0).max(spec.min_width);
+                width.min(self.maximum_width)
             }
             ButtonWidth::Fill => ui.available_width().max(0.0),
             ButtonWidth::Fixed(width) => width.max(0.0),
@@ -267,31 +387,12 @@ impl<'a> Button<'a> {
 
     fn paint_content(
         &self,
-        ui: &Ui,
         painter: &Painter,
         rect: Rect,
-        width: f32,
         metrics: &ButtonMetrics,
         colors: &ButtonColors,
     ) {
-        let label_max_width = match self.width {
-            ButtonWidth::Hug => f32::INFINITY,
-            ButtonWidth::Fill | ButtonWidth::Fixed(_) => {
-                (width - metrics.padding * 2.0 - metrics.icon_width).max(0.0)
-            }
-        };
-        // 文本放得下时复用测量阶段的 galley；只有需要省略号时重新排版。
-        let label = if metrics.label.size().x <= label_max_width {
-            metrics.label.clone()
-        } else {
-            text::layout_text(
-                ui,
-                self.label,
-                TextLayout::single_line(TextStyle::BUTTON, label_max_width),
-            )
-        };
-
-        let total_width = metrics.icon_width + label.size().x;
+        let total_width = metrics.icon_width + metrics.label_width;
         let mut x = rect.center().x - total_width * 0.5;
 
         if let Some(icon) = self.icon {
@@ -306,21 +407,30 @@ impl<'a> Button<'a> {
         }
 
         painter.galley(
-            Pos2::new(x, rect.center().y - label.size().y * 0.5),
-            label,
+            Pos2::new(x, rect.center().y - metrics.label.size().y * 0.5),
+            metrics.label.clone(),
             colors.text,
         );
     }
 }
 
-struct ButtonMetrics {
+struct ButtonSpec {
     height: f32,
     padding: f32,
     spacing: f32,
     icon_size: f32,
+    min_width: f32,
+}
+
+struct ButtonMetrics {
+    width: f32,
+    height: f32,
+    button_height: f32,
+    spacing: f32,
+    icon_size: f32,
     icon_width: f32,
-    content_width: f32,
-    /// 无换行的测量结果。颜色是 PLACEHOLDER，绘制时由 `painter.galley` 的
+    label_width: f32,
+    /// 最终排版结果。颜色是 PLACEHOLDER，绘制时由 `painter.galley` 的
     /// fallback color 替换。
     label: Arc<Galley>,
 }
@@ -493,15 +603,78 @@ mod tests {
         assert_eq!(ButtonSize::S.height(), 40.0);
         assert_eq!(ButtonSize::M.height(), 56.0);
 
-        assert_eq!(ButtonSize::Xs.horizontal_padding(), 12.0);
-        assert_eq!(ButtonSize::S.horizontal_padding(), 16.0);
-        assert_eq!(ButtonSize::M.horizontal_padding(), 24.0);
+        assert_eq!(horizontal_padding_for_height(ButtonSize::Xs.height()), 12.0);
+        assert_eq!(horizontal_padding_for_height(ButtonSize::S.height()), 16.0);
+        assert_eq!(horizontal_padding_for_height(ButtonSize::M.height()), 24.0);
 
-        assert_eq!(ButtonSize::Xs.content_spacing(), 4.0);
-        assert_eq!(ButtonSize::S.content_spacing(), 8.0);
-        assert_eq!(ButtonSize::M.content_spacing(), 8.0);
+        assert_eq!(content_spacing_for_height(ButtonSize::Xs.height()), 4.0);
+        assert_eq!(content_spacing_for_height(ButtonSize::S.height()), 8.0);
+        assert_eq!(content_spacing_for_height(ButtonSize::M.height()), 8.0);
+        assert_eq!(content_spacing_for_height(60.0), 12.0);
 
-        assert_eq!(ButtonSize::S.icon_size(), 20.0);
-        assert_eq!(ButtonSize::M.icon_size(), 24.0);
+        assert_eq!(icon_size_for_height(ButtonSize::S.height()), 20.0);
+        assert_eq!(icon_size_for_height(ButtonSize::M.height()), 24.0);
+    }
+
+    #[test]
+    fn custom_height_recomputes_defaults() {
+        let spec = Button::new("key", "label").height(60.0).spec();
+        assert_eq!(spec.height, 60.0);
+        assert_eq!(spec.padding, 24.0);
+        assert_eq!(spec.spacing, 12.0);
+        assert_eq!(spec.icon_size, 24.0);
+        assert_eq!(spec.min_width, tokens::BUTTON_MIN_WIDTH);
+    }
+
+    #[test]
+    fn builder_overrides_are_kept() {
+        let button = Button::new("key", "label")
+            .minimum_width(100.0)
+            .horizontal_padding(10.0)
+            .icon_size(18.0)
+            .maximum_width(200.0)
+            .reserve_text("reserved")
+            .text_wrap(TextWrap::MultiLine);
+
+        assert_eq!(button.minimum_width, 100.0);
+        assert_eq!(button.horizontal_padding, Some(10.0));
+        assert_eq!(button.icon_size, Some(18.0));
+        assert_eq!(button.maximum_width, 200.0);
+        assert_eq!(button.reserve_text, Some("reserved"));
+        assert_eq!(button.text_wrap, TextWrap::MultiLine);
+    }
+
+    fn measure(button: &Button<'_>) -> ButtonMetrics {
+        let ctx = egui::Context::default();
+        let mut metrics = None;
+        let mut output = ctx.run_ui(Default::default(), |ui| {
+            metrics = Some(button.measure(ui));
+        });
+        output.textures_delta.clear();
+        metrics.unwrap()
+    }
+
+    #[test]
+    fn maximum_width_caps_hug_width() {
+        let button = Button::new("key", "Save").maximum_width(20.0);
+        assert_eq!(measure(&button).width, 20.0);
+    }
+
+    #[test]
+    fn reserve_text_widens_hug_width() {
+        let plain = measure(&Button::new("key", "Save")).width;
+        let reserved =
+            measure(&Button::new("key", "Save").reserve_text("A much longer reserved label")).width;
+        assert!(reserved > plain);
+    }
+
+    #[test]
+    fn wrap_text_grows_height() {
+        let metrics = measure(
+            &Button::new("key", "A long label that needs more than one line")
+                .width(ButtonWidth::Fixed(100.0))
+                .text_wrap(TextWrap::MultiLine),
+        );
+        assert!(metrics.height > ButtonSize::S.height());
     }
 }

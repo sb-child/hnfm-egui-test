@@ -42,12 +42,13 @@ Rust 侧对应：
 
 - `tokens.rs`: `Style` / `Appearance` / `Shape.js` 的尺寸、圆角、state alpha。
 - `text.rs`: `StyledText` / `StyledTextMetrics`。
-- `motion.rs`: `DAnim` / `Anims`。
+- `effects/motion.rs`: `DAnim` / `Anims`。
+- `effects/state_layer.rs`: `StateLayer`。
+- `effects/interpolate.rs`: 圆角等绘制插值。
 - `interact.rs`: `StyledButton` 的命中与交互状态。
-- `state_layer.rs`: `StateLayer`。
 - `theme.rs` / `m3_ui.rs`: 显式主题与每帧上下文。
 - `components/`: 可显示组件；`button.rs` 对应 `DButton`，`card.rs` 对应 `DCard`。
-- 待建：`icon.rs`、`spinner.rs`、`ripple.rs`、`tooltip.rs`。
+- 待建：`components/icon.rs`、`components/spinner.rs`、`components/tooltip.rs`、`effects/ripple.rs`。
 
 ## 组件契约
 
@@ -97,7 +98,7 @@ Rust 侧对应：
 ### 实现顺序
 
 1. `tokens.rs`
-2. `motion.rs`
+2. `effects/motion.rs`
 3. `interact.rs`
 4. `text.rs`
 5. `theme.rs` / `m3_ui.rs`

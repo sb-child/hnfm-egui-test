@@ -1,4 +1,4 @@
-//! M3 组件共享的圆角插值工具。
+//! 动效插值工具。
 
 use egui::CornerRadius;
 
