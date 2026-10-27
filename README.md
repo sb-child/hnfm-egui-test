@@ -4,7 +4,7 @@ egui 自定义 Material 3 组件测试代码，未来会移植到[另一项目](
 
 ![screenshot](./screenshot.png)
 
-运行 [`download_fonts.py`](./download_fonts.py) 下载字体 (没写 `build.rs`)
+运行 [`download_fonts.py`](./download_fonts.py) 下载字体，运行 [`download_icons.py`](./download_icons.py) 下载图标字体并生成名字表 (没写 `build.rs`)
 
 ## 状态
 
@@ -14,7 +14,7 @@ egui 自定义 Material 3 组件测试代码，未来会移植到[另一项目](
 
 - 字体([src/fonts/](./src/fonts/)): 但是没有用 Roboto
 - 颜色([src/material/color.rs](./src/material/color.rs)): 能用
-- 图标 [Material Symbols](https://m3.material.io/styles/icons/overview): todo
+- 图标 [Material Symbols](https://m3.material.io/styles/icons/overview): 能用（`Icon` 常量，可变字体轴）
 - [Buttons](https://m3.material.io/components/buttons/specs): 能用
 - [Cards](https://m3.material.io/components/cards/specs): 能用
 - Spinner: 能用
@@ -30,6 +30,7 @@ egui 自定义 Material 3 组件测试代码，未来会移植到[另一项目](
   - 形状：`DCommon/Common/Shape.js`、`SHAPES.md`
   - 应用入口：[`dux-shell/quickshell`](https://github.com/duxlabs-dev/dux-shell/tree/master/quickshell)
 - 设计规范：[Material 3](https://m3.material.io/components)、[AndroidX Compose Material3](https://github.com/androidx/androidx/tree/androidx-main/compose/material3)
+- 图标字体：[google/material-design-icons](https://github.com/google/material-design-icons) @ `10ecc14`，Apache-2.0
 
 ## 致谢
 

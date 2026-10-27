@@ -11,6 +11,7 @@ egui 自定义 Material 3 组件测试代码，正在从纯 M3 迁移到 `dux-qm
   - 样式：`DCommon/Common/Style.qml`
   - 形状：`DCommon/Common/Shape.js`、`SHAPES.md`
   - 应用入口：[`dux-shell/quickshell`](https://github.com/duxlabs-dev/dux-shell/tree/master/quickshell)
+- 图标字体：[`google/material-design-icons`](https://github.com/google/material-design-icons)，固定 commit `10ecc14790612ca8fd164e3f4ffe9c16fc50d5b7`，Apache-2.0
 - 项目正在从纯 M3 迁移到上面的实现。组件尺寸、圆角、state layer、动效优先对照 `dux-qml-common`。
 
 material3 规范：
@@ -47,8 +48,9 @@ Rust 侧对应：
 - `effects/interpolate.rs`: 圆角等绘制插值。
 - `interact.rs`: `StyledButton` 的命中与交互状态。
 - `theme.rs` / `m3_ui.rs`: 显式主题与每帧上下文。
-- `components/`: 可显示组件；`button.rs` 对应 `DButton`，`card.rs` 对应 `DCard`，`spinner.rs` 对应 `DSpinner`，`tooltip.rs` 对应 `DTooltipHost` / `DTooltipV2`。
-- 待建：`components/icon.rs`、`effects/ripple.rs`。
+- `components/`: 可显示组件；`button.rs` 对应 `DButton`，`card.rs` 对应 `DCard`，`icon.rs` 对应 `DIcon`，`spinner.rs` 对应 `DSpinner`，`tooltip.rs` 对应 `DTooltipHost` / `DTooltipV2`。
+- `icons/`: Material Symbols 字体、名字表和可变字体参数，对应 `Fonts.qml` 的图标字体。
+- 待建：`effects/ripple.rs`。
 
 ## Button 进度
 
@@ -71,12 +73,12 @@ Rust 侧对应：
 - 交互: 圆角命中 `Hit`，hover / press / focus，键盘 fake click，pointer cursor；命中区域不受 press 圆角和 scale 影响。
 - 动效: 按下圆角变化 200ms `standard`，按压缩放 0.98 / 350ms `expressiveFastSpatial`，`reduce_motion` 可关闭；缩放只改绘制，不改布局。
 - busy: `busy` 预留 icon 槽并绘制手绘 spinner，`components/spinner.rs` 已有独立 `Spinner`。
+- icon: `icon(Icon::ADD)` 走 Material Symbols 字体，尺寸跟随 `iconSize`，颜色跟随按钮文字色。
 - tooltip: `tooltip` / `tooltip_side` 接入 `components/tooltip.rs`；禁用态不显示，和 `DButton` 一致。
 - 上下文: `M3Ui` 显式传 `Theme` / `MotionPrefs`，动画 ID 从稳定 key 派生。
 
 ### 未完成 / 部分完成
 
-- `iconName`: 只支持文本字形，Material Symbols 未接入。
 - `enableRipple`: 未做，待 `effects/ripple.rs`。
 - `border` 和四角独立圆角: 未暴露。
 - RTL: 图标与文字顺序、镜像未处理。
@@ -94,6 +96,16 @@ Rust 侧对应：
 - 动效：进场 200ms `expressiveEffects`，退场 100ms；只改透明度，`reduce_motion` 可关。`Area` 自带淡入已关闭。
 - 状态按 `Response::id` 存在 `ctx.data`，调用方每帧调用 `Tooltip::show_for` 或 `Button::tooltip` 即可，不需要自持状态。
 - 未做：rich tooltip、可交互内容、无障碍关联、同时只显示一个 tooltip 的全局仲裁。
+
+## Icon 进度
+
+- 字体：Material Symbols Rounded 可变字体，Apache-2.0，固定 commit `10ecc14`，见 `src/icons/LICENSE`。
+- 名字表：`download_icons.py` 从同版本 `codepoints` 生成 `src/icons/generated.rs`，4304 个常量；`Icon` 的字段私有，只能由常量或 `Icon::from_name` 构造。
+- 排版：ligature 名作为文本，图标字体是独立 family，不参与普通文本 fallback。
+- 轴：`FILL` / `GRAD` / `opsz` / `wght`；`opsz` 固定 24，`GRAD` 浅色 0 / 暗色 -25，`FILL` 和 `wght` 由调用方覆盖。
+- 契约：固定方形尺寸，默认 24；无动效；`Sense::hover()`，不抢点击。
+- 校验：`every_icon_renders_one_glyph` 会排版全部名字，保证字体和名字表一致。
+- 未做：多色图标、自定义图标集、图标浏览页。
 
 ## 组件契约
 

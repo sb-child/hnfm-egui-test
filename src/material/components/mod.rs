@@ -5,10 +5,12 @@
 
 pub mod button;
 pub mod card;
+pub mod icon;
 pub mod spinner;
 pub mod tooltip;
 
 pub use button::{Button, ButtonShape, ButtonSize, ButtonVariant, ButtonWidth, TextWrap};
 pub use card::{Card, CardTone, CardWidth};
+pub use icon::{Icon, IconWidget};
 pub use spinner::Spinner;
 pub use tooltip::{Tooltip, TooltipSide};

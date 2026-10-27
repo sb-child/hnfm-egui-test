@@ -2,9 +2,9 @@ use egui::Stroke;
 
 use crate::material::color::ThemeVariant;
 use crate::material::components::{
-    ButtonShape, ButtonSize, ButtonVariant, ButtonWidth, CardWidth, TextWrap, TooltipSide,
+    ButtonShape, ButtonSize, ButtonVariant, ButtonWidth, CardWidth, Icon, TextWrap, TooltipSide,
 };
-use crate::{fonts, material};
+use crate::{fonts, icons, material};
 
 pub struct AppLayout {
     theme: material::Theme,
@@ -14,6 +14,7 @@ pub struct AppLayout {
 impl AppLayout {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
         fonts::add_fonts(&cc.egui_ctx);
+        icons::add_icon_font(&cc.egui_ctx);
         fonts::configure_text_styles(&cc.egui_ctx, fonts::TextStyleOpt::Sans);
         let color_theme = material::color::generate_theme(ThemeVariant::Cmf {
             primary: 0xff769CDF,
@@ -60,9 +61,16 @@ fn content(m: &mut material::M3Ui<'_>, demo_clicks: &mut u32) {
         .width(CardWidth::Fill)
         .show(m, |m| {
             m.horizontal_wrapped(|m| {
+                let primary: egui::Color32 = m.theme().scheme().primary.into();
+                let settings = m.icon(Icon::SETTINGS).show(m);
+                m.tooltip("设置").show_for(&settings, m);
+                m.icon(Icon::FAVORITE).filled(true).color(primary).show(m);
+                m.icon(Icon::DELETE).size(16.0).show(m);
+                m.icon(Icon::SAVE).size(32.0).weight(500.0).show(m);
+
                 if m.button("btn_filled", "填充按钮")
                     .variant(ButtonVariant::Filled)
-                    .icon("+")
+                    .icon(Icon::ADD)
                     .enable_scale_animation(true)
                     .show(m)
                     .clicked()

@@ -18,6 +18,14 @@ pub enum ThemeMode {
 }
 
 impl ThemeMode {
+    /// 是否是浅色模式（包括对比度变体）。
+    pub fn is_light(self) -> bool {
+        matches!(
+            self,
+            Self::Light | Self::LightMediumContrast | Self::LightHighContrast
+        )
+    }
+
     pub fn scheme(self, theme: &MaterialColorTheme) -> &Scheme {
         match self {
             Self::Light => &theme.schemes.light,

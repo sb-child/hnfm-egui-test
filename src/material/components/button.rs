@@ -8,17 +8,17 @@
 //! - [`SHAPES.md`](https://github.com/duxlabs-dev/dux-qml-common/blob/c6e4a6bce24b804688225b0889410d2ec0ae06d7/SHAPES.md): 按钮圆角基线。
 //! - [`buttons/specs`](https://m3.material.io/components/buttons/specs): 变体颜色映射。
 //!
-//! `.show()` 返回 [`Hit`]；busy 使用手绘 spinner，图标目前使用文本字形。
+//! `.show()` 返回 [`Hit`]；busy 使用手绘 spinner，图标走 Material Symbols 字体。
 
 use std::sync::Arc;
 
 use egui::{
-    Align2, Color32, CornerRadius, FontId, Id, Painter, Pos2, Rect, Stroke, StrokeKind, Ui, Vec2,
+    Color32, CornerRadius, Id, Painter, Pos2, Rect, Stroke, StrokeKind, Ui, Vec2,
     emath::TSTransform, layers::ShapeIdx, text::Galley,
 };
 
-use crate::fonts::ff_sans;
 use crate::material::Scheme;
+use crate::material::components::icon::{self, Icon};
 use crate::material::components::spinner;
 use crate::material::components::tooltip::{self, TooltipSide};
 use crate::material::effects::interpolate;
@@ -135,7 +135,7 @@ pub enum ButtonWidth {
 pub struct Button<'a> {
     key: &'a str,
     label: &'a str,
-    icon: Option<&'a str>,
+    icon: Option<Icon>,
     variant: ButtonVariant,
     size: ButtonSize,
     height: Option<f32>,
@@ -251,7 +251,8 @@ impl<'a> Button<'a> {
         self
     }
 
-    pub fn icon(mut self, icon: &'a str) -> Self {
+    /// 图标。来源: `DButton.qml` 的 `iconName`。
+    pub fn icon(mut self, icon: Icon) -> Self {
         self.icon = Some(icon);
         self
     }
@@ -347,9 +348,17 @@ impl<'a> Button<'a> {
         );
         let focused = hit.focused();
 
+        let icon_grade = icon::grade_for(theme);
         let paint = |painter: &Painter| {
             paint_surface(painter, rect, radius, &colors, layer_alpha);
-            self.paint_content(painter, rect, &metrics, &colors, spinner_elapsed);
+            self.paint_content(
+                painter,
+                rect,
+                &metrics,
+                &colors,
+                spinner_elapsed,
+                icon_grade,
+            );
             if focused {
                 paint_focus_ring(painter, rect, radius, &colors);
             }
@@ -482,6 +491,7 @@ impl<'a> Button<'a> {
         metrics: &ButtonMetrics,
         colors: &ButtonColors,
         spinner_elapsed: Option<f32>,
+        icon_grade: f32,
     ) {
         let total_width = metrics.icon_width + metrics.label_width;
         let mut x = rect.center().x - total_width * 0.5;
@@ -499,13 +509,19 @@ impl<'a> Button<'a> {
                 spinner_elapsed,
             );
             x += metrics.icon_size + metrics.spacing;
-        } else if let Some(icon) = self.icon {
-            painter.text(
+        } else if let Some(icon_id) = self.icon {
+            let icon_rect = Rect::from_center_size(
                 Pos2::new(x + metrics.icon_size * 0.5, rect.center().y),
-                Align2::CENTER_CENTER,
-                icon,
-                FontId::new(metrics.icon_size, ff_sans()),
+                Vec2::splat(metrics.icon_size),
+            );
+            icon::paint(
+                painter,
+                icon_rect,
+                icon_id,
                 colors.text,
+                icon_grade,
+                tokens::FONT_WEIGHT_NORMAL,
+                false,
             );
             x += metrics.icon_size + metrics.spacing;
         }

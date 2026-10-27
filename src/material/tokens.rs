@@ -53,6 +53,14 @@ pub const ICON_SIZE_MEDIUM: f32 = 20.0;
 pub const ICON_SIZE: f32 = 24.0;
 pub const ICON_SIZE_LARGE: f32 = 32.0;
 
+/// 图标 `opsz` 轴。来源: `DIcon.qml` 的 `font.variableAxes` 固定为 24。
+pub const ICON_OPSZ: f32 = 24.0;
+
+/// 图标 `GRAD` 轴。来源: `DIcon.qml` 的 `grade`：
+/// 浅色模式 0，暗色模式 -25，避免细线在深色背景上过亮。
+pub const ICON_GRADE_LIGHT: f32 = 0.0;
+pub const ICON_GRADE_DARK: f32 = -25.0;
+
 /// 按钮高度。来源: `Style.qml` 的 `buttonHeightXXS` 到 `buttonHeightM`。
 pub const BUTTON_HEIGHT_XXS: f32 = 28.0;
 pub const BUTTON_HEIGHT_XS: f32 = 32.0;

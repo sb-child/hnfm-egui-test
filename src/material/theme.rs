@@ -13,23 +13,30 @@ use crate::material::{MaterialColorTheme, Scheme};
 #[derive(Debug, Clone)]
 pub struct Theme {
     scheme: Scheme,
+    mode: ThemeMode,
 }
 
 impl Theme {
-    pub fn new(scheme: Scheme) -> Self {
-        Self { scheme }
+    pub fn new(scheme: Scheme, mode: ThemeMode) -> Self {
+        Self { scheme, mode }
     }
 
     /// 从完整主题里取出指定模式。
     pub fn from_color_theme(theme: &MaterialColorTheme, mode: ThemeMode) -> Self {
         Self {
             scheme: mode.scheme(theme).clone(),
+            mode,
         }
     }
 
     /// 当前颜色方案。
     pub fn scheme(&self) -> &Scheme {
         &self.scheme
+    }
+
+    /// 当前明暗模式。图标 `GRAD` 等轴需要它，不能只看颜色推断。
+    pub fn mode(&self) -> ThemeMode {
+        self.mode
     }
 }
 
@@ -46,5 +53,6 @@ mod tests {
         });
         let theme = Theme::from_color_theme(&full, ThemeMode::Dark);
         assert_eq!(theme.scheme().surface, full.schemes.dark.surface);
+        assert_eq!(theme.mode(), ThemeMode::Dark);
     }
 }
