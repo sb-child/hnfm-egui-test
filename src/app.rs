@@ -3,7 +3,6 @@ use egui::{RichText, Stroke, Vec2, Widget};
 use crate::material::color::ThemeVariant;
 use crate::{
     fonts, material,
-    material::NavRailItem,
     sidebar::{self, RailId, SidebarState},
 };
 
@@ -13,8 +12,6 @@ pub struct AppLayout {
     active_1_before: bool,
     active_2: bool,
     active_2_before: bool,
-    active_3: bool,
-    active_opt: u8,
     sidebar_state: SidebarState,
     demo_clicks: u32,
 }
@@ -35,8 +32,6 @@ impl AppLayout {
             active_1_before: false,
             active_2: false,
             active_2_before: false,
-            active_3: false,
-            active_opt: 0,
             sidebar_state: SidebarState::new(Some(RailId::Files)),
             demo_clicks: 0,
         }
@@ -76,8 +71,6 @@ impl eframe::App for AppLayout {
                     ui,
                     &mut self.active_1,
                     &mut self.active_2,
-                    &mut self.active_3,
-                    &mut self.active_opt,
                     &mut self.sidebar_state,
                     screen_width,
                 );
@@ -178,8 +171,6 @@ fn nav_rail(
     ui: &mut egui::Ui,
     active_1: &mut bool,
     active_2: &mut bool,
-    active_3: &mut bool,
-    active_opt: &mut u8,
     sidebar_state: &mut SidebarState,
     screen_width: f32,
 ) -> Option<RailId> {
@@ -188,41 +179,11 @@ fn nav_rail(
     ui.vertical(|ui| {
         ui.add_space(44.);
         ui.style_mut().spacing.item_spacing = Vec2::new(0., 4.);
-        if NavRailItem::new("theme_toggle", "白天/晚上模式", *active_1)
-            .ui(ui)
-            .clicked()
-        {
+        if rail_button(ui, "白天/晚上模式", *active_1).clicked() {
             *active_1 = !*active_1;
         };
-        if NavRailItem::new("theme_switch", "主题，切换", *active_2)
-            .ui(ui)
-            .clicked()
-        {
+        if rail_button(ui, "主题，切换", *active_2).clicked() {
             *active_2 = !*active_2;
-        };
-        if NavRailItem::new("toggle_test", "toggle 啊啊啊啊啊啊啊啊啊啊", *active_3)
-            .ui(ui)
-            .clicked()
-        {
-            *active_3 = !*active_3;
-        };
-        if NavRailItem::new("opt_0", &format!("opt={}", active_opt), *active_opt == 0)
-            .ui(ui)
-            .clicked()
-        {
-            *active_opt = 0;
-        };
-        if NavRailItem::new("opt_1", "opt2", *active_opt == 1)
-            .ui(ui)
-            .clicked()
-        {
-            *active_opt = 1;
-        };
-        if NavRailItem::new("opt_2", "opt3", *active_opt == 2)
-            .ui(ui)
-            .clicked()
-        {
-            *active_opt = 2;
         };
 
         ui.separator();
@@ -246,6 +207,13 @@ fn nav_rail(
     .inner
 }
 
+fn rail_button(ui: &mut egui::Ui, label: &str, active: bool) -> egui::Response {
+    ui.add_sized(
+        Vec2::new(ui.available_width(), 56.0),
+        egui::Button::new(label).selected(active),
+    )
+}
+
 fn sidebar_button(
     ui: &mut egui::Ui,
     state: &mut SidebarState,
@@ -253,12 +221,7 @@ fn sidebar_button(
     screen_width: f32,
 ) -> bool {
     let active = state.active_rail() == Some(rail);
-    let resp = NavRailItem::new(
-        format!("sidebar_btn_{:?}", rail).as_str(),
-        rail.title(),
-        active,
-    )
-    .ui(ui);
+    let resp = rail_button(ui, rail.title(), active);
     if resp.clicked() {
         state.click_rail(rail, screen_width);
     }

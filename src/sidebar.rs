@@ -17,9 +17,6 @@
 
 use std::time::{Duration, Instant};
 
-use crate::material::ListItem;
-use egui::Widget;
-
 const WIDE_MIN: f32 = 1000.0;
 const MEDIUM_MIN: f32 = 600.0;
 const HOVER_DELAY_MS: u64 = 180;
@@ -98,13 +95,8 @@ impl SidebarInner {
 #[derive(Debug, Clone)]
 pub struct SidebarState {
     inner: SidebarInner,
-    /// 外部关闭请求（List Item 点击等预留）
+    /// 外部关闭请求
     pub close_requested: bool,
-    /// ------ demo list 选中状态 ------
-    pub list_sel_std: bool,
-    pub list_sel_seg_0: bool,
-    pub list_sel_seg_1: bool,
-    pub list_sel_seg_2: bool,
 }
 
 impl SidebarState {
@@ -115,10 +107,6 @@ impl SidebarState {
                 hover_blocked: false,
             },
             close_requested: false,
-            list_sel_std: false,
-            list_sel_seg_0: false,
-            list_sel_seg_1: false,
-            list_sel_seg_2: false,
         }
     }
 
@@ -181,9 +169,7 @@ impl SidebarState {
         )
     }
 
-    // ---------------------------------------------------------------------------
     // 状态转换
-    // ---------------------------------------------------------------------------
 
     /// 每帧调用，处理所有时间和输入驱动的自动转换。
     ///
@@ -283,9 +269,7 @@ impl SidebarState {
         }
     }
 
-    // ---------------------------------------------------------------------------
     // 内部辅助
-    // ---------------------------------------------------------------------------
 
     fn is_user_pinned(&self) -> bool {
         matches!(
@@ -314,17 +298,17 @@ impl SidebarState {
         }
         let wide = screen_width >= WIDE_MIN;
         let new_inner = match (wide, &self.inner) {
-            // 缩小: Pinned → Hidden
+            // 缩小: Pinned -> Hidden
             (false, SidebarInner::Pinned { active_rail, .. }) => Some(SidebarInner::Hidden {
                 active_rail: *active_rail,
                 hover_blocked: false,
             }),
-            // 放大: Hidden → Pinned
+            // 放大: Hidden -> Pinned
             (true, SidebarInner::Hidden { active_rail, .. }) => Some(SidebarInner::Pinned {
                 active_rail: *active_rail,
                 is_user_pinned: false,
             }),
-            // 放大: Flyout* → Pinned
+            // 放大: Flyout* -> Pinned
             (true, SidebarInner::FlyoutHoverPending { active_rail, .. }) => {
                 Some(SidebarInner::Pinned {
                     active_rail: *active_rail,
@@ -385,7 +369,7 @@ impl SidebarState {
                 None
             }
 
-            // Hidden → 鼠标移到 rail 上 → 开始计时
+            // Hidden -> 鼠标移到 rail 上 -> 开始计时
             (SidebarInner::Hidden { active_rail, .. }, Some(rail)) => {
                 self.inner = SidebarInner::FlyoutHoverPending {
                     active_rail: *active_rail,
@@ -395,7 +379,7 @@ impl SidebarState {
                 Some(Duration::from_millis(delay_ms))
             }
 
-            // Pending → 鼠标离开了 rail
+            // Pending -> 鼠标离开了 rail
             (SidebarInner::FlyoutHoverPending { active_rail, .. }, None) => {
                 self.inner = SidebarInner::Hidden {
                     active_rail: *active_rail,
@@ -404,7 +388,7 @@ impl SidebarState {
                 None
             }
 
-            // Pending → 同一 rail，检查计时
+            // Pending -> 同一 rail，检查计时
             (
                 SidebarInner::FlyoutHoverPending {
                     active_rail,
@@ -425,7 +409,7 @@ impl SidebarState {
                 }
             }
 
-            // Pending → 不同 rail，重启计时
+            // Pending -> 不同 rail，重启计时
             (SidebarInner::FlyoutHoverPending { active_rail, .. }, Some(rail)) => {
                 self.inner = SidebarInner::FlyoutHoverPending {
                     active_rail: *active_rail,
@@ -435,7 +419,7 @@ impl SidebarState {
                 Some(Duration::from_millis(delay_ms))
             }
 
-            // Hover 已可见 → 同一 rail，保持
+            // Hover 已可见 -> 同一 rail，保持
             (SidebarInner::FlyoutHover { .. }, Some(rail))
                 if Some(rail) == self.inner.active_rail() =>
             {
@@ -443,7 +427,7 @@ impl SidebarState {
                 None
             }
 
-            // Hover 已可见 → 不同 rail，立即切换
+            // Hover 已可见 -> 不同 rail，立即切换
             (SidebarInner::FlyoutHover { active_rail, .. }, Some(rail)) => {
                 self.inner = SidebarInner::FlyoutHover {
                     active_rail: *active_rail,
@@ -452,7 +436,7 @@ impl SidebarState {
                 None
             }
 
-            // Hover 已可见 → 鼠标不在 rail 上，不急于关闭（check_flyout_leave 处理）
+            // Hover 已可见 -> 鼠标不在 rail 上，不急于关闭（check_flyout_leave 处理）
             (SidebarInner::FlyoutHover { .. }, None) => None,
 
             // 其余组合无操作
@@ -461,9 +445,7 @@ impl SidebarState {
     }
 }
 
-// ---------------------------------------------------------------------------
 // 渲染函数
-// ---------------------------------------------------------------------------
 
 /// Flyout 叠加层（scrim + flyout content）。
 pub fn render_overlays(
@@ -481,7 +463,7 @@ pub fn render_overlays(
     let scrim_color: egui::Color32 = crate::material::color::access(|_p, s| s.scrim).into();
 
     // scrim
-    egui::Area::new(egui::Id::new("sidebar_scrim"))
+    egui::Area::new(egui::Id::unique("sidebar_scrim"))
         .fixed_pos(egui::pos2(96.0, content_rect.top()))
         .constrain(false)
         .order(egui::Order::Foreground)
@@ -495,7 +477,7 @@ pub fn render_overlays(
                 if ui
                     .interact(
                         ui.max_rect(),
-                        egui::Id::new("scrim_click"),
+                        egui::Id::unique("scrim_click"),
                         egui::Sense::click(),
                     )
                     .clicked()
@@ -506,7 +488,7 @@ pub fn render_overlays(
         });
 
     // flyout content
-    egui::Area::new(egui::Id::new("sidebar_flyout"))
+    egui::Area::new(egui::Id::unique("sidebar_flyout"))
         .fixed_pos(egui::pos2(96.0, content_rect.top()))
         .constrain(false)
         .order(egui::Order::Foreground)
@@ -514,17 +496,12 @@ pub fn render_overlays(
         .fade_in(false)
         .show(ctx, |ui| {
             ui.allocate_ui(egui::vec2(300.0, content_rect.height()), |ui| {
-                render_overlay_content(ui, rail, surface_color, state);
+                render_overlay_content(ui, rail, surface_color);
             });
         });
 }
 
-fn render_overlay_content(
-    ui: &mut egui::Ui,
-    rail: RailId,
-    surface_color: egui::Color32,
-    state: &mut SidebarState,
-) {
+fn render_overlay_content(ui: &mut egui::Ui, rail: RailId, surface_color: egui::Color32) {
     let frame = egui::containers::Frame {
         inner_margin: egui::Margin::symmetric(0, 4),
         outer_margin: egui::Margin::ZERO,
@@ -547,8 +524,6 @@ fn render_overlay_content(
     frame.show(ui, |ui| {
         ui.style_mut().spacing.item_spacing = egui::Vec2::new(0.0, 0.0);
         ui.heading(rail.title());
-        ui.add_space(4.);
-        render_sidebar_content(ui, state);
         ui.add_space(ui.available_height());
     });
 }
@@ -563,92 +538,4 @@ pub fn render_pinned(ui: &mut egui::Ui, state: &mut SidebarState) {
     ui.set_width(300.0);
     ui.style_mut().spacing.item_spacing = egui::Vec2::new(0.0, 0.0);
     ui.heading(rail.title());
-    ui.add_space(4.);
-    render_sidebar_content(ui, state);
-}
-
-fn render_sidebar_content(ui: &mut egui::Ui, state: &mut SidebarState) {
-    ui.heading("Standard (单选)");
-    ui.add_space(4.);
-    ui.vertical(|ui| {
-        ui.style_mut().spacing.item_spacing = egui::Vec2::new(0., 2.);
-        if ListItem::new(
-            "std_0",
-            "我的世界",
-            None,
-            None,
-            state.list_sel_std,
-            false,
-            false,
-            false,
-        )
-        .ui(ui)
-        .clicked()
-        {
-            state.list_sel_std = true;
-        }
-        if ListItem::new(
-            "std_1",
-            "进入1qjkl异世界",
-            Some("qqqqqqq1111"),
-            None,
-            !state.list_sel_std,
-            false,
-            false,
-            false,
-        )
-        .ui(ui)
-        .clicked()
-        {
-            state.list_sel_std = false;
-        }
-    });
-
-    ui.add_space(16.);
-    ui.heading("Segmented (多选)");
-    ui.add_space(4.);
-
-    let seg0 = state.list_sel_seg_0;
-    let seg1 = state.list_sel_seg_1;
-    let seg2 = state.list_sel_seg_2;
-
-    ui.vertical(|ui| {
-        ui.style_mut().spacing.item_spacing = egui::Vec2::new(0., 2.);
-        if ListItem::new("seg_0", "叫我起床", None, None, seg0, true, false, !seg1)
-            .ui(ui)
-            .clicked()
-        {
-            state.list_sel_seg_0 = !state.list_sel_seg_0;
-        }
-        if ListItem::new(
-            "seg_1",
-            "别叫我起床",
-            Some("因为我想多睡点觉"),
-            None,
-            seg1,
-            true,
-            !seg0,
-            !seg2,
-        )
-        .ui(ui)
-        .clicked()
-        {
-            state.list_sel_seg_1 = !state.list_sel_seg_1;
-        }
-        if ListItem::new(
-            "seg_2",
-            "在半夜叫我",
-            Some("喵喵11111111111111111122222211111111111111111"),
-            Some("嗯111111"),
-            seg2,
-            true,
-            !seg1,
-            false,
-        )
-        .ui(ui)
-        .clicked()
-        {
-            state.list_sel_seg_2 = !state.list_sel_seg_2;
-        }
-    });
 }

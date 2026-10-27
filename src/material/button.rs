@@ -1,12 +1,12 @@
 //! M3 按钮。
 //!
-//! 尺寸、内边距、图标尺寸来源（dux-qml-common commit `c6e4a6b`）:
-//! - `DButton.qml`:
-//!   https://github.com/duxlabs-dev/dux-qml-common/blob/c6e4a6bce24b804688225b0889410d2ec0ae06d7/DCommon/Widgets/DButton.qml
-//! - `Style.qml` 的按钮高度 / 最小宽度 / state layer：
-//!   https://github.com/duxlabs-dev/dux-qml-common/blob/c6e4a6bce24b804688225b0889410d2ec0ae06d7/DCommon/Common/Style.qml
-//! - `SHAPES.md` 的按钮圆角基线：
-//!   https://github.com/duxlabs-dev/dux-qml-common/blob/c6e4a6bce24b804688225b0889410d2ec0ae06d7/SHAPES.md
+//! 来源:
+//! - [`DButton.qml`](https://github.com/duxlabs-dev/dux-qml-common/blob/c6e4a6bce24b804688225b0889410d2ec0ae06d7/DCommon/Widgets/DButton.qml): 尺寸、内边距、图标尺寸。
+//! - [`Style.qml`](https://github.com/duxlabs-dev/dux-qml-common/blob/c6e4a6bce24b804688225b0889410d2ec0ae06d7/DCommon/Common/Style.qml): 按钮高度、最小宽度、state layer。
+//! - [`Shape.js`](https://github.com/duxlabs-dev/dux-qml-common/blob/c6e4a6bce24b804688225b0889410d2ec0ae06d7/DCommon/Common/Shape.js): 按钮圆角计算。
+//! - [`StateLayer.qml`](https://github.com/duxlabs-dev/dux-qml-common/blob/c6e4a6bce24b804688225b0889410d2ec0ae06d7/DCommon/Widgets/StateLayer.qml): state color。
+//! - [`SHAPES.md`](https://github.com/duxlabs-dev/dux-qml-common/blob/c6e4a6bce24b804688225b0889410d2ec0ae06d7/SHAPES.md): 按钮圆角基线。
+//! - [`buttons/specs`](https://m3.material.io/components/buttons/specs): 变体颜色映射。
 //!
 //! `.ui()` 返回 [`Hit`]；图标目前使用文本字形。
 
@@ -34,7 +34,9 @@ pub enum ButtonVariant {
     Text,
 }
 
-/// 按钮高度档位。对应 `Style.qml` 的 `buttonHeightXXS` 到 `buttonHeightM`。
+/// 按钮高度档位。
+///
+/// - 来源: `Style.qml`: `buttonHeightXXS` 到 `buttonHeightM`。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ButtonSize {
     Xxs,
@@ -53,7 +55,7 @@ impl ButtonSize {
         }
     }
 
-    /// 来源 `DButton.qml` 的 `horizontalPadding`。
+    /// 来源: `DButton.qml` 的 `horizontalPadding`。
     fn horizontal_padding(self) -> f32 {
         match self {
             Self::Xxs | Self::Xs => tokens::SPACING_M,
@@ -62,7 +64,7 @@ impl ButtonSize {
         }
     }
 
-    /// 来源 `DButton.qml` 的 `contentRow.spacing`。
+    /// 来源: `DButton.qml` 的 `contentRow.spacing`。
     fn content_spacing(self) -> f32 {
         match self {
             Self::Xxs | Self::Xs => tokens::SPACING_XS,
@@ -70,7 +72,7 @@ impl ButtonSize {
         }
     }
 
-    /// 来源 `DButton.qml` 的 `iconSize`。
+    /// 来源: `DButton.qml` 的 `iconSize`。
     fn icon_size(self) -> f32 {
         if self.height() <= tokens::BUTTON_HEIGHT_S {
             tokens::ICON_SIZE_MEDIUM
@@ -83,9 +85,13 @@ impl ButtonSize {
 /// 圆角形状。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ButtonShape {
-    /// 胶囊。`Shape.fullRadius(width, height)`。
+    /// 胶囊。
+    ///
+    /// - 来源: `Shape.js`: `fullRadius(width, height)`。
     Round,
-    /// 方角。`Shape.buttonRadius(height, pressed, false)`。
+    /// 方角。
+    ///
+    /// - 来源: `Shape.js`: `buttonRadius(height, pressed, false)`。
     Square,
 }
 
@@ -382,9 +388,12 @@ struct ButtonColors {
     focus_ring: Color32,
 }
 
-/// M3 按钮颜色。变体映射参考 M3 button specs，行为参考 `DButton.qml` 的
-/// `backgroundColor` / `textColor` 与 `StateLayer.qml` 的 state color。
-/// https://m3.material.io/components/buttons/specs
+/// M3 按钮颜色。
+///
+/// 来源:
+/// - `buttons/specs`: 变体颜色映射。
+/// - `DButton.qml`: `backgroundColor` / `textColor`。
+/// - `StateLayer.qml`: state color。
 fn button_colors(variant: ButtonVariant, enabled: bool) -> ButtonColors {
     let (primary, on_primary, secondary_container, on_secondary_container, outline, on_surface): (
         Color32,

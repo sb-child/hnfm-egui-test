@@ -4,10 +4,8 @@
 //! 这里在按下时根据圆角形状选择 `Sense`，避免事后修改 `Response`。
 //!
 //! 参考:
-//! - `StateLayer.qml`:
-//!   https://github.com/duxlabs-dev/dux-qml-common/blob/c6e4a6bce24b804688225b0889410d2ec0ae06d7/DCommon/Widgets/StateLayer.qml
-//! - `StyledButton.qml`:
-//!   https://github.com/duxlabs-dev/dux-qml-common/blob/c6e4a6bce24b804688225b0889410d2ec0ae06d7/DCommon/Widgets/StyledButton.qml
+//! - [`StateLayer.qml`](https://github.com/duxlabs-dev/dux-qml-common/blob/c6e4a6bce24b804688225b0889410d2ec0ae06d7/DCommon/Widgets/StateLayer.qml): 交互状态到 state layer 的映射。
+//! - [`StyledButton.qml`](https://github.com/duxlabs-dev/dux-qml-common/blob/c6e4a6bce24b804688225b0889410d2ec0ae06d7/DCommon/Widgets/StyledButton.qml): 按钮的按下与悬停行为。
 
 use egui::{CornerRadius, CursorIcon, Id, PointerButton, Pos2, Rect, Response, Sense, Ui};
 

@@ -2,15 +2,11 @@
 //!
 //! `Curve` 是可采样的 cubic bezier；`animate01` 推进 0..1 进度并应用曲线。
 //!
-//! 曲线与时长来源（dux-qml-common commit `c6e4a6b`）:
-//! - `Style.qml` 的 `expressiveCurves` / `expressiveDurations`:
-//!   https://github.com/duxlabs-dev/dux-qml-common/blob/c6e4a6bce24b804688225b0889410d2ec0ae06d7/DCommon/Common/Style.qml
-//! - `StateLayer.qml` 的默认 50ms `standardDecel`:
-//!   https://github.com/duxlabs-dev/dux-qml-common/blob/c6e4a6bce24b804688225b0889410d2ec0ae06d7/DCommon/Widgets/StateLayer.qml
-//! - `DButton.qml` 的 200ms `standard` 与 350ms `expressiveFastSpatial`:
-//!   https://github.com/duxlabs-dev/dux-qml-common/blob/c6e4a6bce24b804688225b0889410d2ec0ae06d7/DCommon/Widgets/DButton.qml
-//! - `DRipple.qml` 的 500ms:
-//!   https://github.com/duxlabs-dev/dux-qml-common/blob/c6e4a6bce24b804688225b0889410d2ec0ae06d7/DCommon/Widgets/DRipple.qml
+//! 来源（dux-qml-common commit `c6e4a6b`）:
+//! - [`Style.qml`](https://github.com/duxlabs-dev/dux-qml-common/blob/c6e4a6bce24b804688225b0889410d2ec0ae06d7/DCommon/Common/Style.qml): `expressiveCurves` / `expressiveDurations`。
+//! - [`StateLayer.qml`](https://github.com/duxlabs-dev/dux-qml-common/blob/c6e4a6bce24b804688225b0889410d2ec0ae06d7/DCommon/Widgets/StateLayer.qml): 默认 50ms `standardDecel`。
+//! - [`DButton.qml`](https://github.com/duxlabs-dev/dux-qml-common/blob/c6e4a6bce24b804688225b0889410d2ec0ae06d7/DCommon/Widgets/DButton.qml): 200ms `standard` 与 350ms `expressiveFastSpatial`。
+//! - [`DRipple.qml`](https://github.com/duxlabs-dev/dux-qml-common/blob/c6e4a6bce24b804688225b0889410d2ec0ae06d7/DCommon/Widgets/DRipple.qml): 500ms。
 
 use egui::{Id, Ui};
 
@@ -29,19 +25,19 @@ pub struct Curve {
 impl Curve {
     pub const LINEAR: Self = Self::new(0.0, 0.0, 1.0, 1.0);
 
-    /// 来源 `Style.qml` 的 `expressiveCurves.standard`。
+    /// 来源: `Style.qml` 的 `expressiveCurves.standard`。
     pub const STANDARD: Self = Self::new(0.2, 0.0, 0.0, 1.0);
 
-    /// 来源 `Style.qml` 的 `expressiveCurves.standardDecel`。
+    /// 来源: `Style.qml` 的 `expressiveCurves.standardDecel`。
     pub const STANDARD_DECEL: Self = Self::new(0.0, 0.0, 0.0, 1.0);
 
-    /// 来源 `Style.qml` 的 `expressiveCurves.expressiveEffects`。
+    /// 来源: `Style.qml` 的 `expressiveCurves.expressiveEffects`。
     pub const EXPRESSIVE_EFFECTS: Self = Self::new(0.34, 0.8, 0.34, 1.0);
 
-    /// 来源 `Style.qml` 的 `expressiveCurves.expressiveFastSpatial`。
+    /// 来源: `Style.qml` 的 `expressiveCurves.expressiveFastSpatial`。
     pub const EXPRESSIVE_FAST_SPATIAL: Self = Self::new(0.42, 1.67, 0.21, 0.9);
 
-    /// 来源 `Style.qml` 的 `expressiveCurves.expressiveDefaultSpatial`。
+    /// 来源: `Style.qml` 的 `expressiveCurves.expressiveDefaultSpatial`。
     pub const EXPRESSIVE_DEFAULT_SPATIAL: Self = Self::new(0.38, 1.21, 0.22, 1.0);
 
     pub const fn new(x1: f32, y1: f32, x2: f32, y2: f32) -> Self {
@@ -101,32 +97,31 @@ impl Motion {
         curve: Curve::LINEAR,
     };
 
-    /// State layer 的透明度过渡。来源 `StateLayer.qml` 默认值。
+    /// State layer 的透明度过渡。来源: `StateLayer.qml` 默认值。
     pub const SHORTER: Self = Self {
         duration_ms: 50.0,
         curve: Curve::STANDARD_DECEL,
     };
 
-    /// 颜色、展开等通用效果。来源 `Style.expressiveDurations.expressiveEffects`。
+    /// 颜色、展开等通用效果。来源: `Style.qml` 的 `expressiveDurations.expressiveEffects`。
     pub const EXPRESSIVE_EFFECTS: Self = Self {
         duration_ms: 200.0,
         curve: Curve::EXPRESSIVE_EFFECTS,
     };
 
-    /// 形状变化，例如按钮圆角在 rest 和 pressed 之间过渡。
-    /// 来源 `DButton.qml` 的 `Behavior on pressProgress`：200ms，standard 曲线。
+    /// 形状变化，例如按钮圆角在 rest 和 pressed 之间过渡。来源: `DButton.qml` 的 `Behavior on pressProgress`：200ms，standard 曲线。
     pub const SHAPE_CHANGE: Self = Self {
         duration_ms: 200.0,
         curve: Curve::STANDARD,
     };
 
-    /// 按钮按压缩放。来源 `Style.expressiveDurations.expressiveFastSpatial`。
+    /// 按钮按压缩放。来源: `Style.qml` 的 `expressiveDurations.expressiveFastSpatial`。
     pub const EXPRESSIVE_FAST_SPATIAL: Self = Self {
         duration_ms: 350.0,
         curve: Curve::EXPRESSIVE_FAST_SPATIAL,
     };
 
-    /// 较慢的空间过渡，例如 dialog / ripple。来源 `expressiveDefaultSpatial`。
+    /// 较慢的空间过渡，例如 dialog / ripple。来源: `Style.qml` 的 `expressiveDurations.expressiveDefaultSpatial`。
     pub const EXPRESSIVE_DEFAULT_SPATIAL: Self = Self {
         duration_ms: 500.0,
         curve: Curve::EXPRESSIVE_DEFAULT_SPATIAL,

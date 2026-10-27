@@ -11,8 +11,9 @@ egui 自定义 material 3 组件测试代码，未来会移植到[另一项目](
 - 字体([src/fonts/](./src/fonts/)): 但是没有用 Roboto
 - 颜色([src/material/color.rs](./src/material/color.rs)): 能用
 - 图标 [Material Symbols](https://m3.material.io/styles/icons/overview): todo
-- [Navigation Rail](https://m3.material.io/components/navigation-rail/specs): 能用
-- [Lists](https://m3.material.io/components/lists/specs): 能用
+- [Buttons](https://m3.material.io/components/buttons/specs): 能用
+- [Navigation Rail](https://m3.material.io/components/navigation-rail/specs): todo
+- [Lists](https://m3.material.io/components/lists/specs): todo
 
 ## Sources
 

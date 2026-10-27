@@ -1,10 +1,8 @@
 //! M3 state layer：交互反馈的半透明叠加层。
 //!
 //! 来源:
-//! - `StateLayer.qml`:
-//!   https://github.com/duxlabs-dev/dux-qml-common/blob/c6e4a6bce24b804688225b0889410d2ec0ae06d7/DCommon/Widgets/StateLayer.qml
-//! - `Style.qml` 的 `stateLayerHover` / `stateLayerFocus` / `stateLayerPressed`:
-//!   https://github.com/duxlabs-dev/dux-qml-common/blob/c6e4a6bce24b804688225b0889410d2ec0ae06d7/DCommon/Common/Style.qml
+//! - [`StateLayer.qml`](https://github.com/duxlabs-dev/dux-qml-common/blob/c6e4a6bce24b804688225b0889410d2ec0ae06d7/DCommon/Widgets/StateLayer.qml): state layer 的合成与绘制。
+//! - [`Style.qml`](https://github.com/duxlabs-dev/dux-qml-common/blob/c6e4a6bce24b804688225b0889410d2ec0ae06d7/DCommon/Common/Style.qml): `stateLayerHover` / `stateLayerFocus` / `stateLayerPressed`。
 
 use egui::{Color32, CornerRadius, Painter, Rect};
 
@@ -12,8 +10,8 @@ use crate::material::tokens::{STATE_HOVER, STATE_PRESSED};
 
 /// 由 hover / press / focus 的动画进度合成最终透明度。
 ///
-/// 优先级与 `StateLayer.qml` 一致：pressed 和 focus 都是 0.12，
-/// 高于 hover 的 0.08。`press_t` 和 `focus_t` 取较大值。
+/// 来源: `StateLayer.qml`。
+/// 优先级：pressed 和 focus 都是 0.12，高于 hover 的 0.08。`press_t` 和 `focus_t` 取较大值。
 pub fn alpha(hover_t: f32, press_t: f32, focus_t: f32) -> f32 {
     let press_focus = press_t.max(focus_t).clamp(0.0, 1.0);
     let hover = STATE_HOVER * hover_t.clamp(0.0, 1.0);

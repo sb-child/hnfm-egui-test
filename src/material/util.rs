@@ -1,6 +1,4 @@
-//! 通用工具函数：颜色/圆角插值、Hover 防抖等。
-//!
-//! 本模块集中放置 M3 组件之间共享的数学/动画工具，方便移植到 HoshinekoFM。
+//! M3 组件共享的圆角插值工具。
 
 use egui::CornerRadius;
 
@@ -15,26 +13,4 @@ pub fn lerp_corner_radius(a: CornerRadius, b: CornerRadius, t: f32) -> CornerRad
         sw: lerp_u8(a.sw, b.sw, t),
         se: lerp_u8(a.se, b.se, t),
     }
-}
-
-/// 逐分量在两个 CornerRadius 之间做线性插值，保证结果不低于 `b` 的对应分量。
-///
-/// 防止 segmented→interaction 过渡中，seg_corner 的"自由边"大圆角
-/// 被 interaction_corner 的初始小值拉低。
-pub fn blend_corner_radius(a: CornerRadius, b: CornerRadius, t: f32) -> CornerRadius {
-    fn blend(a: u8, b: u8, t: f32) -> u8 {
-        let lerped = (a as f32 + (b as f32 - a as f32) * t).round() as u8;
-        lerped.max(b)
-    }
-    CornerRadius {
-        nw: blend(a.nw, b.nw, t),
-        ne: blend(a.ne, b.ne, t),
-        sw: blend(a.sw, b.sw, t),
-        se: blend(a.se, b.se, t),
-    }
-}
-
-/// f32 线性插值。
-pub fn lerp_f32(a: f32, b: f32, t: f32) -> f32 {
-    a + (b - a) * t
 }
