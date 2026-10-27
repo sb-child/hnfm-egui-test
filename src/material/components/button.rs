@@ -20,6 +20,7 @@ use egui::{
 use crate::fonts::ff_sans;
 use crate::material::Scheme;
 use crate::material::components::spinner;
+use crate::material::components::tooltip::{self, TooltipSide};
 use crate::material::effects::interpolate;
 use crate::material::effects::motion::{self, Motion, MotionPrefs};
 use crate::material::effects::state_layer;
@@ -147,6 +148,8 @@ pub struct Button<'a> {
     background_color: Option<Color32>,
     text_color: Option<Color32>,
     reserve_text: Option<&'a str>,
+    tooltip: Option<&'a str>,
+    tooltip_side: TooltipSide,
     text_wrap: TextWrap,
     busy: bool,
     enable_scale_animation: bool,
@@ -172,6 +175,8 @@ impl<'a> Button<'a> {
             background_color: None,
             text_color: None,
             reserve_text: None,
+            tooltip: None,
+            tooltip_side: TooltipSide::Bottom,
             text_wrap: TextWrap::SingleLine,
             busy: false,
             enable_scale_animation: false,
@@ -255,6 +260,19 @@ impl<'a> Button<'a> {
     /// 来源: `DButton.qml` 的 `reserveText`。
     pub fn reserve_text(mut self, text: &'a str) -> Self {
         self.reserve_text = Some(text);
+        self
+    }
+
+    /// 悬停或键盘聚焦时显示的 tooltip。空字符串视为不显示。
+    /// 来源: `DButton.qml` 的 `tooltipText`。
+    pub fn tooltip(mut self, text: &'a str) -> Self {
+        self.tooltip = Some(text);
+        self
+    }
+
+    /// tooltip 方位。来源: `DButton.qml` 的 `tooltipSide`。
+    pub fn tooltip_side(mut self, side: TooltipSide) -> Self {
+        self.tooltip_side = side;
         self
     }
 
@@ -343,6 +361,18 @@ impl<'a> Button<'a> {
             paint_transformed(ui, press_transform(rect, scale), paint);
         }
 
+        // 禁用时传 None，让已经显示的 tooltip 走退场。
+        let tooltip_text = if enabled { self.tooltip } else { None };
+        tooltip::show_for_response(
+            ui,
+            theme,
+            prefs,
+            hit.response(),
+            tooltip_text,
+            self.tooltip_side,
+            false,
+        );
+
         hit
     }
 
@@ -407,12 +437,19 @@ impl<'a> Button<'a> {
                 self.label,
                 TextLayout::multi_line(TextStyle::BUTTON, label_box_width),
             ),
+            TextWrap::MultiLineAnywhere => text::layout_text(
+                ui,
+                self.label,
+                TextLayout::multi_line_anywhere(TextStyle::BUTTON, label_box_width),
+            ),
         };
 
         let content_height = if has_icon_slot { spec.icon_size } else { 0.0 }.max(label.size().y);
         let height = match self.text_wrap {
             TextWrap::SingleLine => spec.height,
-            TextWrap::MultiLine => spec.height.max(content_height + tokens::SPACING_S * 2.0),
+            TextWrap::MultiLine | TextWrap::MultiLineAnywhere => {
+                spec.height.max(content_height + tokens::SPACING_S * 2.0)
+            }
         };
 
         ButtonMetrics {

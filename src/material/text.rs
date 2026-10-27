@@ -12,7 +12,7 @@ use std::sync::Arc;
 
 use egui::epaint::text::VariationCoords;
 use egui::text::{Galley, LayoutJob, TextFormat, TextWrapping};
-use egui::{Color32, FontFamily, FontId, Ui, Vec2};
+use egui::{Align, Color32, FontFamily, FontId, Ui, Vec2};
 
 use crate::fonts::{ff_mono, ff_sans};
 use crate::material::tokens;
@@ -41,7 +41,8 @@ pub struct TextStyle {
     pub font: TextFont,
     pub size: f32,
     pub weight: f32,
-    pub line_height: f32,
+    /// `None` 表示使用字体默认行高，对应 QML `Text` 未设置 `lineHeight` 的情况。
+    pub line_height: Option<f32>,
 }
 
 impl TextStyle {
@@ -50,7 +51,17 @@ impl TextStyle {
             font,
             size,
             weight,
-            line_height,
+            line_height: Some(line_height),
+        }
+    }
+
+    /// 使用字体默认行高。
+    pub const fn font_line_height(font: TextFont, size: f32, weight: f32) -> Self {
+        Self {
+            font,
+            size,
+            weight,
+            line_height: None,
         }
     }
 
@@ -61,6 +72,18 @@ impl TextStyle {
         tokens::FONT_WEIGHT_MEDIUM,
         tokens::LINE_HEIGHT_MEDIUM,
     );
+
+    /// Tooltip 文本。
+    ///
+    /// 来源: `DTooltipV2.qml` 的 `contentItem`：
+    /// - `fontSizeSmall` (12)
+    /// - 未设置 `font.weight`，使用默认字重
+    /// - 未设置 `lineHeight`，使用字体默认行高
+    pub const TOOLTIP: Self = Self::font_line_height(
+        TextFont::Sans,
+        tokens::FONT_SIZE_SMALL,
+        tokens::FONT_WEIGHT_NORMAL,
+    );
 }
 
 /// 换行策略。
@@ -70,6 +93,10 @@ pub enum TextWrap {
     SingleLine,
     /// 多行，按词边界换行，不显示省略号。
     MultiLine,
+    /// 多行，任意字符处都可换行，不显示省略号。
+    ///
+    /// 来源: `DTooltipV2.qml` 多行模式使用的 `Text.WrapAnywhere`。
+    MultiLineAnywhere,
 }
 
 /// 一次文本排版的完整参数。
@@ -78,6 +105,8 @@ pub struct TextLayout {
     pub style: TextStyle,
     pub wrap: TextWrap,
     pub max_width: f32,
+    /// 水平对齐。默认左对齐。
+    pub halign: Align,
 }
 
 impl TextLayout {
@@ -86,6 +115,7 @@ impl TextLayout {
             style,
             wrap: TextWrap::SingleLine,
             max_width,
+            halign: Align::LEFT,
         }
     }
 
@@ -94,7 +124,23 @@ impl TextLayout {
             style,
             wrap: TextWrap::MultiLine,
             max_width,
+            halign: Align::LEFT,
         }
+    }
+
+    pub const fn multi_line_anywhere(style: TextStyle, max_width: f32) -> Self {
+        Self {
+            style,
+            wrap: TextWrap::MultiLineAnywhere,
+            max_width,
+            halign: Align::LEFT,
+        }
+    }
+
+    /// 设置水平对齐。
+    pub fn halign(mut self, align: Align) -> Self {
+        self.halign = align;
+        self
     }
 
     fn wrapping(self) -> TextWrapping {
@@ -111,6 +157,12 @@ impl TextLayout {
                 overflow_character: None,
                 break_anywhere: false,
             },
+            TextWrap::MultiLineAnywhere => TextWrapping {
+                max_width: self.max_width,
+                max_rows: usize::MAX,
+                overflow_character: None,
+                break_anywhere: true,
+            },
         }
     }
 }
@@ -124,12 +176,13 @@ pub fn layout_text(ui: &Ui, text: &str, layout: TextLayout) -> Arc<Galley> {
         TextFormat {
             font_id: FontId::new(layout.style.size, layout.style.font.family()),
             color: Color32::PLACEHOLDER,
-            line_height: Some(layout.style.line_height),
+            line_height: layout.style.line_height,
             coords: VariationCoords::new([(b"wght", layout.style.weight)]),
             ..Default::default()
         },
     );
     job.wrap = layout.wrapping();
+    job.halign = layout.halign;
     ui.fonts_mut(|f| f.layout_job(job))
 }
 
@@ -147,7 +200,17 @@ mod tests {
         assert_eq!(TextStyle::BUTTON.font, TextFont::Sans);
         assert_eq!(TextStyle::BUTTON.size, tokens::FONT_SIZE_MEDIUM);
         assert_eq!(TextStyle::BUTTON.weight, tokens::FONT_WEIGHT_MEDIUM);
-        assert_eq!(TextStyle::BUTTON.line_height, tokens::LINE_HEIGHT_MEDIUM);
+        assert_eq!(
+            TextStyle::BUTTON.line_height,
+            Some(tokens::LINE_HEIGHT_MEDIUM)
+        );
+    }
+
+    #[test]
+    fn tooltip_style_uses_font_line_height() {
+        assert_eq!(TextStyle::TOOLTIP.size, tokens::FONT_SIZE_SMALL);
+        assert_eq!(TextStyle::TOOLTIP.weight, tokens::FONT_WEIGHT_NORMAL);
+        assert_eq!(TextStyle::TOOLTIP.line_height, None);
     }
 
     #[test]
@@ -162,6 +225,21 @@ mod tests {
         let wrapping = TextLayout::multi_line(TextStyle::BUTTON, 100.0).wrapping();
         assert_eq!(wrapping.max_rows, usize::MAX);
         assert_eq!(wrapping.overflow_character, None);
+        assert!(!wrapping.break_anywhere);
+    }
+
+    #[test]
+    fn multi_line_anywhere_breaks_anywhere() {
+        let wrapping = TextLayout::multi_line_anywhere(TextStyle::BUTTON, 100.0).wrapping();
+        assert_eq!(wrapping.max_rows, usize::MAX);
+        assert_eq!(wrapping.overflow_character, None);
+        assert!(wrapping.break_anywhere);
+    }
+
+    #[test]
+    fn halign_is_forwarded_to_layout() {
+        let layout = TextLayout::multi_line(TextStyle::BUTTON, 100.0).halign(Align::Center);
+        assert_eq!(layout.halign, Align::Center);
     }
 
     #[test]

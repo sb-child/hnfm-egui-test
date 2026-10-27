@@ -171,6 +171,16 @@ impl Motion {
         curve: Curve::EXPRESSIVE_EFFECTS,
     };
 
+    /// Tooltip 退场透明度。
+    ///
+    /// 来源:
+    /// - `DTooltipV2.qml` 的 exit transition: `Style.shorterDuration`，expressiveEffects 曲线。
+    /// - `Theme.qml` 把 `shorterDuration` 覆盖为 100ms。
+    pub const TOOLTIP_HIDE: Self = Self {
+        duration: ms(100.0),
+        curve: Curve::EXPRESSIVE_EFFECTS,
+    };
+
     /// 形状变化，例如按钮圆角在 rest 和 pressed 之间过渡。来源: `DButton.qml` 的 `Behavior on pressProgress`：200ms，standard 曲线。
     pub const SHAPE_CHANGE: Self = Self {
         duration: ms(200.0),
@@ -188,6 +198,54 @@ impl Motion {
         duration: ms(500.0),
         curve: Curve::EXPRESSIVE_DEFAULT_SPATIAL,
     };
+}
+
+/// 一次带完成标记的动画采样。
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct AnimatedValue {
+    /// 应用曲线后的值。
+    pub value: f32,
+    /// 本次推进是否已经到达 `target`。
+    pub finished: bool,
+}
+
+/// 把值朝 `target` 推进，并报告是否已经到达。
+///
+/// 与 [`animate`] 的区别是保留线性进度，用来判断过渡是否结束。进入和退出
+/// 需要不同时长时，由调用方按当前方向传入对应的 `motion`。`id` 必须稳定。
+pub fn animate_toward(
+    ui: &Ui,
+    id: Id,
+    target: f32,
+    motion: Motion,
+    prefs: MotionPrefs,
+) -> AnimatedValue {
+    /// 浮点比较容差。egui 到达目标后会直接返回目标值，这里只防御舍入误差。
+    const FINISHED_EPSILON: f32 = 1e-6;
+
+    let motion = prefs.effective(motion);
+    if motion.duration <= 0.0 {
+        return AnimatedValue {
+            value: target,
+            finished: true,
+        };
+    }
+
+    let linear = ui
+        .ctx()
+        .animate_value_with_time(id, target, motion.duration);
+    AnimatedValue {
+        value: motion.curve.eval(linear),
+        finished: (linear - target).abs() <= FINISHED_EPSILON,
+    }
+}
+
+/// 预置一个动画值的起点。
+///
+/// egui 的 `animate_value_with_time` 第一次调用会直接返回目标值。淡入前先
+/// 用 0 时长写入起点，下一次把目标改成 1 才会产生过渡。`id` 必须稳定。
+pub fn set_animation_start(ui: &Ui, id: Id, value: f32) {
+    ui.ctx().animate_value_with_time(id, value, 0.0);
 }
 
 /// 把 0 或 1 的目标值推进成带曲线的当前值。
@@ -287,6 +345,7 @@ mod tests {
         assert_eq!(Motion::NONE.duration, 0.0);
         assert!((Motion::SHORTER.duration - 0.1).abs() < 1e-6);
         assert!((Motion::EXPRESSIVE_EFFECTS.duration - 0.2).abs() < 1e-6);
+        assert!((Motion::TOOLTIP_HIDE.duration - 0.1).abs() < 1e-6);
         assert!((Motion::SHAPE_CHANGE.duration - 0.2).abs() < 1e-6);
         assert!((Motion::EXPRESSIVE_FAST_SPATIAL.duration - 0.35).abs() < 1e-6);
         assert!((Motion::EXPRESSIVE_DEFAULT_SPATIAL.duration - 0.5).abs() < 1e-6);
@@ -298,6 +357,23 @@ mod tests {
             .map(|step| Curve::EXPRESSIVE_FAST_SPATIAL.eval(step as f32 / 100.0))
             .fold(f32::MIN, f32::max);
         assert!(peak > 1.0);
+    }
+
+    #[test]
+    fn animate_toward_finishes_immediately_without_motion() {
+        let context = egui::Context::default();
+        let mut output = context.run_ui(Default::default(), |ui| {
+            let animated = animate_toward(
+                ui,
+                Id::unique("tooltip"),
+                1.0,
+                Motion::EXPRESSIVE_EFFECTS,
+                MotionPrefs::NONE,
+            );
+            assert_eq!(animated.value, 1.0);
+            assert!(animated.finished);
+        });
+        output.textures_delta.clear();
     }
 
     #[test]

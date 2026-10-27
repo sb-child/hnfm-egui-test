@@ -2,7 +2,7 @@ use egui::Stroke;
 
 use crate::material::color::ThemeVariant;
 use crate::material::components::{
-    ButtonShape, ButtonSize, ButtonVariant, ButtonWidth, CardWidth, TextWrap,
+    ButtonShape, ButtonSize, ButtonVariant, ButtonWidth, CardWidth, TextWrap, TooltipSide,
 };
 use crate::{fonts, material};
 
@@ -82,6 +82,7 @@ fn content(m: &mut material::M3Ui<'_>, demo_clicks: &mut u32) {
                     .variant(ButtonVariant::Tonal)
                     .background_color(egui::Color32::from_rgb(98, 0, 238))
                     .text_color(egui::Color32::WHITE)
+                    .tooltip("覆盖背景色与文字色")
                     .show(m);
                 m.button("btn_disabled", "禁用")
                     .variant(ButtonVariant::Filled)
@@ -110,6 +111,8 @@ fn content(m: &mut material::M3Ui<'_>, demo_clicks: &mut u32) {
                 m.button("btn_busy", "保存中")
                     .variant(ButtonVariant::Tonal)
                     .busy(true)
+                    .tooltip("正在写入磁盘，这一条 tooltip 显示在上方")
+                    .tooltip_side(TooltipSide::Top)
                     .show(m);
                 m.button("btn_max", "Hug 最大宽度限制")
                     .maximum_width(120.0)
@@ -130,6 +133,7 @@ fn content(m: &mut material::M3Ui<'_>, demo_clicks: &mut u32) {
                     .show(m);
             });
 
-            m.ui().label(format!("Button clicks: {}", *demo_clicks));
+            let clicks = m.ui().label(format!("Button clicks: {}", *demo_clicks));
+            m.tooltip("这个计数会在点击按钮后增加").show_for(&clicks, m);
         });
 }

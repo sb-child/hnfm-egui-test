@@ -47,8 +47,8 @@ Rust 侧对应：
 - `effects/interpolate.rs`: 圆角等绘制插值。
 - `interact.rs`: `StyledButton` 的命中与交互状态。
 - `theme.rs` / `m3_ui.rs`: 显式主题与每帧上下文。
-- `components/`: 可显示组件；`button.rs` 对应 `DButton`，`card.rs` 对应 `DCard`，`spinner.rs` 对应 `DSpinner`。
-- 待建：`components/icon.rs`、`components/tooltip.rs`、`effects/ripple.rs`。
+- `components/`: 可显示组件；`button.rs` 对应 `DButton`，`card.rs` 对应 `DCard`，`spinner.rs` 对应 `DSpinner`，`tooltip.rs` 对应 `DTooltipHost` / `DTooltipV2`。
+- 待建：`components/icon.rs`、`effects/ripple.rs`。
 
 ## Button 进度
 
@@ -66,24 +66,34 @@ Rust 侧对应：
 
 ### 已完成
 
-- 尺寸与布局: `ButtonSize::{Xxs, Xs, S, M}`，自定义 `height` 后重算 padding / spacing / icon size，`minimum_width`、`maximum_width`、`Hug / Fill / Fixed`、`Round / Square`、`reserve_text`、单行 / 多行 `text_wrap`。
+- 尺寸与布局: `ButtonSize::{Xxs, Xs, S, M}`，自定义 `height` 后重算 padding / spacing / icon size，`minimum_width`、`maximum_width`、`Hug / Fill / Fixed`、`Round / Square`、`reserve_text`、单行 / 多行 / 任意断行 `text_wrap`。
 - 颜色: 四种 variant 的启用 / 禁用配色，`background_color` / `text_color` 启用态覆盖，state layer，focus ring，圆角插值。
 - 交互: 圆角命中 `Hit`，hover / press / focus，键盘 fake click，pointer cursor；命中区域不受 press 圆角和 scale 影响。
 - 动效: 按下圆角变化 200ms `standard`，按压缩放 0.98 / 350ms `expressiveFastSpatial`，`reduce_motion` 可关闭；缩放只改绘制，不改布局。
 - busy: `busy` 预留 icon 槽并绘制手绘 spinner，`components/spinner.rs` 已有独立 `Spinner`。
+- tooltip: `tooltip` / `tooltip_side` 接入 `components/tooltip.rs`；禁用态不显示，和 `DButton` 一致。
 - 上下文: `M3Ui` 显式传 `Theme` / `MotionPrefs`，动画 ID 从稳定 key 派生。
 
 ### 未完成 / 部分完成
 
 - `iconName`: 只支持文本字形，Material Symbols 未接入。
 - `enableRipple`: 未做，待 `effects/ripple.rs`。
-- `tooltipText` / `tooltipSide`: 未做，待 `components/tooltip.rs`。
 - `border` 和四角独立圆角: 未暴露。
 - RTL: 图标与文字顺序、镜像未处理。
 - Accessibility: role / name / press action、spinner ignored 未处理。
 - Return / Enter 自动重复: 上游忽略 autorepeat，当前 fake click 未单独过滤。
 - ButtonGroup: 独立组件，后面做。
 - 禁用态: 当前按 M3 variant 分支，未统一成 DButton 的 `onSurface_12`；原因见上。
+
+## Tooltip 进度
+
+- 纯文本 plain tooltip：单行省略、多行任意断行，最大内容宽 500。
+- 尺寸：左右 padding 12，上下 8，圆角 4，背景 `inverseSurface`，文字 `inverseOnSurface`。
+- 定位：`Top / Bottom / Left / Right` 固定方位，gap 8，窗口内边距 4。QML 的自动选边在上层调用链里走不到，未实现。
+- 触发：hover 延迟 400ms，键盘 focus 立即显示；禁用控件不显示。指针离开窗口时立即进入退场。
+- 动效：进场 200ms `expressiveEffects`，退场 100ms；只改透明度，`reduce_motion` 可关。`Area` 自带淡入已关闭。
+- 状态按 `Response::id` 存在 `ctx.data`，调用方每帧调用 `Tooltip::show_for` 或 `Button::tooltip` 即可，不需要自持状态。
+- 未做：rich tooltip、可交互内容、无障碍关联、同时只显示一个 tooltip 的全局仲裁。
 
 ## 组件契约
 

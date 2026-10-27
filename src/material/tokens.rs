@@ -38,6 +38,15 @@ pub const LINE_HEIGHT_MEDIUM: f32 = 20.0;
 /// M3 的 Medium 字重。通过可变字体轴 `wght` 使用。
 pub const FONT_WEIGHT_MEDIUM: f32 = 500.0;
 
+/// 默认字重。来源: QML `Text` 的默认 `font.weight`。
+pub const FONT_WEIGHT_NORMAL: f32 = 400.0;
+
+/// Tooltip 内容最大宽度（不含 padding）。来源: `Style.qml` 的 `tooltipMaxWidth`。
+pub const TOOLTIP_MAX_WIDTH: f32 = 500.0;
+
+/// Tooltip 显示延迟，单位秒。来源: `Style.qml` 的 `tooltipDelay` (400ms)。
+pub const TOOLTIP_DELAY: f32 = 0.4;
+
 /// 图标尺寸。来源: `Style.qml` 的 `iconSizeSmall` 到 `iconSizeLarge`。
 pub const ICON_SIZE_SMALL: f32 = 16.0;
 pub const ICON_SIZE_MEDIUM: f32 = 20.0;
