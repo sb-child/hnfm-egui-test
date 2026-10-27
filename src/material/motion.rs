@@ -83,47 +83,53 @@ impl Curve {
     }
 }
 
+/// 把源文件里的毫秒值转换成秒。只在编译期使用。
+const fn ms(milliseconds: f32) -> f32 {
+    milliseconds / 1000.0
+}
+
 /// 一个动效 token：时长 + 曲线。
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Motion {
-    pub duration_ms: f32,
+    /// 时长，单位秒。
+    pub duration: f32,
     pub curve: Curve,
 }
 
 impl Motion {
     /// 无动画。测试、reduce motion 或“立即跳到目标”时使用。
     pub const NONE: Self = Self {
-        duration_ms: 0.0,
+        duration: 0.0,
         curve: Curve::LINEAR,
     };
 
     /// State layer 的透明度过渡。来源: `StateLayer.qml` 默认值。
     pub const SHORTER: Self = Self {
-        duration_ms: 50.0,
+        duration: ms(50.0),
         curve: Curve::STANDARD_DECEL,
     };
 
     /// 颜色、展开等通用效果。来源: `Style.qml` 的 `expressiveDurations.expressiveEffects`。
     pub const EXPRESSIVE_EFFECTS: Self = Self {
-        duration_ms: 200.0,
+        duration: ms(200.0),
         curve: Curve::EXPRESSIVE_EFFECTS,
     };
 
     /// 形状变化，例如按钮圆角在 rest 和 pressed 之间过渡。来源: `DButton.qml` 的 `Behavior on pressProgress`：200ms，standard 曲线。
     pub const SHAPE_CHANGE: Self = Self {
-        duration_ms: 200.0,
+        duration: ms(200.0),
         curve: Curve::STANDARD,
     };
 
     /// 按钮按压缩放。来源: `Style.qml` 的 `expressiveDurations.expressiveFastSpatial`。
     pub const EXPRESSIVE_FAST_SPATIAL: Self = Self {
-        duration_ms: 350.0,
+        duration: ms(350.0),
         curve: Curve::EXPRESSIVE_FAST_SPATIAL,
     };
 
     /// 较慢的空间过渡，例如 dialog / ripple。来源: `Style.qml` 的 `expressiveDurations.expressiveDefaultSpatial`。
     pub const EXPRESSIVE_DEFAULT_SPATIAL: Self = Self {
-        duration_ms: 500.0,
+        duration: ms(500.0),
         curve: Curve::EXPRESSIVE_DEFAULT_SPATIAL,
     };
 }
@@ -133,13 +139,13 @@ impl Motion {
 /// `id` 必须稳定，例如从组件 key 派生 `id.with("hover")`。
 pub fn animate01(ui: &Ui, id: Id, active: bool, motion: Motion) -> f32 {
     let target = if active { 1.0 } else { 0.0 };
-    if motion.duration_ms <= 0.0 {
+    if motion.duration <= 0.0 {
         return target;
     }
 
     let linear = ui
         .ctx()
-        .animate_value_with_time(id, target, motion.duration_ms / 1000.0);
+        .animate_value_with_time(id, target, motion.duration);
     motion.curve.eval(linear)
 }
 
@@ -169,6 +175,16 @@ mod tests {
             assert!(value >= previous - 1e-6);
             previous = value;
         }
+    }
+
+    #[test]
+    fn durations_are_stored_in_seconds() {
+        assert_eq!(Motion::NONE.duration, 0.0);
+        assert!((Motion::SHORTER.duration - 0.05).abs() < 1e-6);
+        assert!((Motion::EXPRESSIVE_EFFECTS.duration - 0.2).abs() < 1e-6);
+        assert!((Motion::SHAPE_CHANGE.duration - 0.2).abs() < 1e-6);
+        assert!((Motion::EXPRESSIVE_FAST_SPATIAL.duration - 0.35).abs() < 1e-6);
+        assert!((Motion::EXPRESSIVE_DEFAULT_SPATIAL.duration - 0.5).abs() < 1e-6);
     }
 
     #[test]

@@ -122,7 +122,14 @@ impl eframe::App for AppLayout {
             .show_collapsible(ui, &mut self.terminal_expanded, terminal);
 
         // 内容区
-        egui::CentralPanel::default().show(ui, |ui| content(ui, &mut self.demo_clicks));
+        let mut content_frame = surface_frame;
+        content_frame.inner_margin = egui::epaint::Margin::symmetric(
+            material::tokens::SPACING_L as i8,
+            material::tokens::SPACING_S as i8,
+        );
+        egui::CentralPanel::default()
+            .frame(content_frame)
+            .show(ui, |ui| content(ui, &mut self.demo_clicks));
 
         // 主题
         if self.active_1 != self.active_1_before {
@@ -243,52 +250,56 @@ fn terminal(ui: &mut egui::Ui) {
 }
 
 fn content(ui: &mut egui::Ui, demo_clicks: &mut u32) {
-    ui.heading("M3 Button");
-    ui.horizontal_wrapped(|ui| {
-        if material::Button::new("btn_filled", "填充按钮")
-            .variant(material::ButtonVariant::Filled)
-            .icon("+")
-            .ui(ui)
-            .clicked()
-        {
-            *demo_clicks += 1;
-        }
-        material::Button::new("btn_tonal", "色调按钮")
-            .variant(material::ButtonVariant::Tonal)
-            .ui(ui);
-        material::Button::new("btn_outlined", "描边按钮")
-            .variant(material::ButtonVariant::Outlined)
-            .ui(ui);
-        material::Button::new("btn_text", "文本按钮")
-            .variant(material::ButtonVariant::Text)
-            .ui(ui);
-        material::Button::new("btn_disabled", "禁用")
-            .variant(material::ButtonVariant::Filled)
-            .enabled(false)
-            .ui(ui);
-    });
+    material::Card::new()
+        .title("M3 Button")
+        .width(material::CardWidth::Fill)
+        .show(ui, |ui| {
+            ui.horizontal_wrapped(|ui| {
+                if material::Button::new("btn_filled", "填充按钮")
+                    .variant(material::ButtonVariant::Filled)
+                    .icon("+")
+                    .ui(ui)
+                    .clicked()
+                {
+                    *demo_clicks += 1;
+                }
+                material::Button::new("btn_tonal", "色调按钮")
+                    .variant(material::ButtonVariant::Tonal)
+                    .ui(ui);
+                material::Button::new("btn_outlined", "描边按钮")
+                    .variant(material::ButtonVariant::Outlined)
+                    .ui(ui);
+                material::Button::new("btn_text", "文本按钮")
+                    .variant(material::ButtonVariant::Text)
+                    .ui(ui);
+                material::Button::new("btn_disabled", "禁用")
+                    .variant(material::ButtonVariant::Filled)
+                    .enabled(false)
+                    .ui(ui);
+            });
 
-    ui.horizontal_wrapped(|ui| {
-        material::Button::new("btn_xs", "XS")
-            .size(material::ButtonSize::Xs)
-            .ui(ui);
-        material::Button::new("btn_s", "S")
-            .size(material::ButtonSize::S)
-            .ui(ui);
-        material::Button::new("btn_m", "M")
-            .size(material::ButtonSize::M)
-            .ui(ui);
-        material::Button::new("btn_square", "方角")
-            .shape(material::ButtonShape::Square)
-            .ui(ui);
-    });
+            ui.horizontal_wrapped(|ui| {
+                material::Button::new("btn_xs", "XS")
+                    .size(material::ButtonSize::Xs)
+                    .ui(ui);
+                material::Button::new("btn_s", "S")
+                    .size(material::ButtonSize::S)
+                    .ui(ui);
+                material::Button::new("btn_m", "M")
+                    .size(material::ButtonSize::M)
+                    .ui(ui);
+                material::Button::new("btn_square", "方角")
+                    .shape(material::ButtonShape::Square)
+                    .ui(ui);
+            });
 
-    material::Button::new("btn_fill", "Fill 宽度")
-        .variant(material::ButtonVariant::Tonal)
-        .width(material::ButtonWidth::Fill)
-        .ui(ui);
+            material::Button::new("btn_fill", "Fill 宽度")
+                .variant(material::ButtonVariant::Tonal)
+                .width(material::ButtonWidth::Fill)
+                .ui(ui);
 
-    ui.label(format!("Button clicks: {}", *demo_clicks));
+            ui.label(format!("Button clicks: {}", *demo_clicks));
+        });
 
     ui.add_space(15.0);
     let t = "egui 支持可变字体，可以通过 VariationCoords 控制粗细等属性。查看示例 font_variations";
