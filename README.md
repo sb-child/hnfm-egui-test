@@ -17,6 +17,7 @@ egui 自定义 Material 3 组件测试代码，未来会移植到[另一项目](
 - 图标 [Material Symbols](https://m3.material.io/styles/icons/overview): todo
 - [Buttons](https://m3.material.io/components/buttons/specs): 能用
 - [Cards](https://m3.material.io/components/cards/specs): 能用
+- Spinner: 能用
 - [Navigation Rail](https://m3.material.io/components/navigation-rail/specs): todo
 - [Lists](https://m3.material.io/components/lists/specs): todo
 

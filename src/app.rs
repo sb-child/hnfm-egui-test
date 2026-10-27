@@ -100,6 +100,10 @@ fn content(m: &mut material::M3Ui<'_>, demo_clicks: &mut u32) {
                 m.button("btn_reserve", "保存")
                     .reserve_text("保存中...")
                     .show(m);
+                m.button("btn_busy", "保存中")
+                    .variant(ButtonVariant::Tonal)
+                    .busy(true)
+                    .show(m);
                 m.button("btn_max", "Hug 最大宽度限制")
                     .maximum_width(120.0)
                     .show(m);
@@ -109,6 +113,15 @@ fn content(m: &mut material::M3Ui<'_>, demo_clicks: &mut u32) {
                 .variant(ButtonVariant::Tonal)
                 .width(ButtonWidth::Fill)
                 .show(m);
+
+            m.horizontal_wrapped(|m| {
+                m.spinner("spinner_24").size(24.0).show(m);
+                m.spinner("spinner_40").size(40.0).show(m);
+                m.spinner("spinner_static")
+                    .size(40.0)
+                    .running(false)
+                    .show(m);
+            });
 
             m.ui().label(format!("Button clicks: {}", *demo_clicks));
         });

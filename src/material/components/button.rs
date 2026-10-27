@@ -8,7 +8,7 @@
 //! - [`SHAPES.md`](https://github.com/duxlabs-dev/dux-qml-common/blob/c6e4a6bce24b804688225b0889410d2ec0ae06d7/SHAPES.md): 按钮圆角基线。
 //! - [`buttons/specs`](https://m3.material.io/components/buttons/specs): 变体颜色映射。
 //!
-//! `.show()` 返回 [`Hit`]；图标目前使用文本字形。
+//! `.show()` 返回 [`Hit`]；busy 使用手绘 spinner，图标目前使用文本字形。
 
 use std::sync::Arc;
 
@@ -19,6 +19,7 @@ use egui::{
 
 use crate::fonts::ff_sans;
 use crate::material::Scheme;
+use crate::material::components::spinner;
 use crate::material::effects::interpolate;
 use crate::material::effects::motion::{self, Motion, MotionPrefs};
 use crate::material::effects::state_layer;
@@ -145,6 +146,7 @@ pub struct Button<'a> {
     maximum_width: f32,
     reserve_text: Option<&'a str>,
     text_wrap: TextWrap,
+    busy: bool,
     enabled: bool,
     motion: Option<MotionPrefs>,
 }
@@ -166,6 +168,7 @@ impl<'a> Button<'a> {
             maximum_width: f32::INFINITY,
             reserve_text: None,
             text_wrap: TextWrap::SingleLine,
+            busy: false,
             enabled: true,
             motion: None,
         }
@@ -241,6 +244,12 @@ impl<'a> Button<'a> {
         self
     }
 
+    /// busy 时 icon 槽显示 spinner。来源: `DButton.qml` 的 `busy`。
+    pub fn busy(mut self, busy: bool) -> Self {
+        self.busy = busy;
+        self
+    }
+
     pub fn enabled(mut self, enabled: bool) -> Self {
         self.enabled = enabled;
         self
@@ -278,10 +287,11 @@ impl<'a> Button<'a> {
         let anim = transitions(ui, id, &hit, enabled, prefs);
         let radius = interpolate::lerp_corner_radius(radius_rest, radius_pressed, anim.shape);
         let layer_alpha = state_layer::alpha(anim.hover, anim.press, anim.focus);
+        let spinner_elapsed = motion::looping_seconds(ui, id.with("spinner"), self.busy, prefs);
 
         let painter = ui.painter();
         paint_surface(painter, rect, radius, &colors, layer_alpha);
-        self.paint_content(painter, rect, &metrics, &colors);
+        self.paint_content(painter, rect, &metrics, &colors, spinner_elapsed);
         if hit.focused() {
             paint_focus_ring(painter, rect, radius, &colors);
         }
@@ -321,7 +331,8 @@ impl<'a> Button<'a> {
             .size()
             .x
         });
-        let icon_width = if self.icon.is_some() {
+        let has_icon_slot = self.busy || self.icon.is_some();
+        let icon_width = if has_icon_slot {
             spec.icon_size + spec.spacing
         } else {
             0.0
@@ -351,12 +362,7 @@ impl<'a> Button<'a> {
             ),
         };
 
-        let content_height = if self.icon.is_some() {
-            spec.icon_size
-        } else {
-            0.0
-        }
-        .max(label.size().y);
+        let content_height = if has_icon_slot { spec.icon_size } else { 0.0 }.max(label.size().y);
         let height = match self.text_wrap {
             TextWrap::SingleLine => spec.height,
             TextWrap::MultiLine => spec.height.max(content_height + tokens::SPACING_S * 2.0),
@@ -391,11 +397,25 @@ impl<'a> Button<'a> {
         rect: Rect,
         metrics: &ButtonMetrics,
         colors: &ButtonColors,
+        spinner_elapsed: Option<f32>,
     ) {
         let total_width = metrics.icon_width + metrics.label_width;
         let mut x = rect.center().x - total_width * 0.5;
 
-        if let Some(icon) = self.icon {
+        if self.busy {
+            let icon_rect = Rect::from_center_size(
+                Pos2::new(x + metrics.icon_size * 0.5, rect.center().y),
+                Vec2::splat(metrics.icon_size),
+            );
+            spinner::paint(
+                painter,
+                icon_rect,
+                colors.text,
+                tokens::SPINNER_STROKE_WIDTH,
+                spinner_elapsed,
+            );
+            x += metrics.icon_size + metrics.spacing;
+        } else if let Some(icon) = self.icon {
             painter.text(
                 Pos2::new(x + metrics.icon_size * 0.5, rect.center().y),
                 Align2::CENTER_CENTER,
@@ -658,6 +678,16 @@ mod tests {
     fn maximum_width_caps_hug_width() {
         let button = Button::new("key", "Save").maximum_width(20.0);
         assert_eq!(measure(&button).width, 20.0);
+    }
+
+    #[test]
+    fn busy_reserves_icon_slot() {
+        let button = Button::new("key", "Save")
+            .busy(true)
+            .width(ButtonWidth::Fixed(200.0));
+        let metrics = measure(&button);
+        assert_eq!(metrics.icon_width, 28.0);
+        assert_eq!(metrics.icon_size, 20.0);
     }
 
     #[test]

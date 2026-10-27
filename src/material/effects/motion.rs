@@ -1,6 +1,7 @@
 //! Material 3 / Expressive 动效。
 //!
-//! `Curve` 是可采样的 cubic bezier；`animate01` 推进 0..1 进度并应用曲线。
+//! `Curve` 是可采样的 cubic bezier；`animate01` 推进 0..1 进度并应用曲线，
+//! `looping_seconds` 提供 spinner 一类无限循环动画的时钟。
 //!
 //! 来源（dux-qml-common commit `c6e4a6b`）:
 //! - [`Style.qml`](https://github.com/duxlabs-dev/dux-qml-common/blob/c6e4a6bce24b804688225b0889410d2ec0ae06d7/DCommon/Common/Style.qml): `expressiveCurves` / `expressiveDurations`。
@@ -123,12 +124,17 @@ impl MotionPrefs {
         speed: AnimationSpeed::None,
     };
 
+    /// 当前偏好是否允许动效。
+    pub fn animations_enabled(self) -> bool {
+        !self.reduce_motion && self.speed.enabled()
+    }
+
     /// 按偏好返回实际使用的动效；关闭时返回 [`Motion::NONE`]。
     pub fn effective(self, motion: Motion) -> Motion {
-        if self.reduce_motion || !self.speed.enabled() {
-            Motion::NONE
-        } else {
+        if self.animations_enabled() {
             motion
+        } else {
+            Motion::NONE
         }
     }
 }
@@ -207,6 +213,30 @@ pub fn animate01(ui: &Ui, id: Id, active: bool, motion: Motion, prefs: MotionPre
     animate(ui, id, if active { 1.0 } else { 0.0 }, motion, prefs)
 }
 
+/// 返回无限循环动画已经运行的秒数。
+///
+/// `id` 必须稳定。`running` 变为 false 或动效关闭时会清零，
+/// 再次运行从 0 开始。运行期间每帧请求重绘。
+pub fn looping_seconds(ui: &Ui, id: Id, running: bool, prefs: MotionPrefs) -> Option<f32> {
+    let start_id = id.with("loop_start");
+    if !running || !prefs.animations_enabled() {
+        ui.ctx().data_mut(|data| data.remove_temp::<f64>(start_id));
+        return None;
+    }
+
+    let now = ui.input(|input| input.time);
+    let start = ui
+        .ctx()
+        .data(|data| data.get_temp::<f64>(start_id))
+        .unwrap_or_else(|| {
+            ui.ctx().data_mut(|data| data.insert_temp(start_id, now));
+            now
+        });
+
+    ui.ctx().request_repaint();
+    Some((now - start).max(0.0) as f32)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -251,6 +281,75 @@ mod tests {
             .map(|step| Curve::EXPRESSIVE_FAST_SPATIAL.eval(step as f32 / 100.0))
             .fold(f32::MIN, f32::max);
         assert!(peak > 1.0);
+    }
+
+    #[test]
+    fn looping_seconds_advances_and_resets() {
+        let context = egui::Context::default();
+        let id = Id::unique("spinner");
+
+        let mut output = context.run_ui(
+            egui::RawInput {
+                time: Some(10.0),
+                ..Default::default()
+            },
+            |ui| {
+                assert_eq!(
+                    looping_seconds(ui, id, true, MotionPrefs::DEFAULT),
+                    Some(0.0)
+                );
+            },
+        );
+        output.textures_delta.clear();
+
+        let mut output = context.run_ui(
+            egui::RawInput {
+                time: Some(10.5),
+                ..Default::default()
+            },
+            |ui| {
+                let elapsed = looping_seconds(ui, id, true, MotionPrefs::DEFAULT).unwrap();
+                assert!((elapsed - 0.5).abs() < 1e-6);
+            },
+        );
+        output.textures_delta.clear();
+
+        let mut output = context.run_ui(
+            egui::RawInput {
+                time: Some(11.0),
+                ..Default::default()
+            },
+            |ui| {
+                assert_eq!(looping_seconds(ui, id, false, MotionPrefs::DEFAULT), None);
+            },
+        );
+        output.textures_delta.clear();
+
+        let mut output = context.run_ui(
+            egui::RawInput {
+                time: Some(12.0),
+                ..Default::default()
+            },
+            |ui| {
+                assert_eq!(
+                    looping_seconds(ui, id, true, MotionPrefs::DEFAULT),
+                    Some(0.0)
+                );
+            },
+        );
+        output.textures_delta.clear();
+    }
+
+    #[test]
+    fn looping_seconds_respects_reduced_motion() {
+        let context = egui::Context::default();
+        let mut output = context.run_ui(Default::default(), |ui| {
+            assert_eq!(
+                looping_seconds(ui, Id::unique("spinner"), true, MotionPrefs::NONE),
+                None
+            );
+        });
+        output.textures_delta.clear();
     }
 
     #[test]

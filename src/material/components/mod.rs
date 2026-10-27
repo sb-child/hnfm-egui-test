@@ -5,6 +5,8 @@
 
 pub mod button;
 pub mod card;
+pub mod spinner;
 
 pub use button::{Button, ButtonShape, ButtonSize, ButtonVariant, ButtonWidth, TextWrap};
 pub use card::{Card, CardTone, CardWidth};
+pub use spinner::Spinner;

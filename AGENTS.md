@@ -47,8 +47,8 @@ Rust 侧对应：
 - `effects/interpolate.rs`: 圆角等绘制插值。
 - `interact.rs`: `StyledButton` 的命中与交互状态。
 - `theme.rs` / `m3_ui.rs`: 显式主题与每帧上下文。
-- `components/`: 可显示组件；`button.rs` 对应 `DButton`，`card.rs` 对应 `DCard`。
-- 待建：`components/icon.rs`、`components/spinner.rs`、`components/tooltip.rs`、`effects/ripple.rs`。
+- `components/`: 可显示组件；`button.rs` 对应 `DButton`，`card.rs` 对应 `DCard`，`spinner.rs` 对应 `DSpinner`。
+- 待建：`components/icon.rs`、`components/tooltip.rs`、`effects/ripple.rs`。
 
 ## 组件契约
 

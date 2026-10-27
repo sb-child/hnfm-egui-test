@@ -5,7 +5,7 @@
 
 use egui::{InnerResponse, Ui};
 
-use crate::material::components::{Button, Card};
+use crate::material::components::{Button, Card, Spinner};
 use crate::material::effects::MotionPrefs;
 use crate::material::theme::Theme;
 
@@ -43,6 +43,11 @@ impl<'a> M3Ui<'a> {
     /// 创建一个卡片 builder。
     pub fn card<'b>(&self) -> Card<'b> {
         Card::new()
+    }
+
+    /// 创建一个 spinner builder。
+    pub fn spinner<'b>(&self, key: &'b str) -> Spinner<'b> {
+        Spinner::new(key)
     }
 
     pub fn horizontal_wrapped<R>(

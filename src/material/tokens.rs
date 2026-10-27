@@ -7,6 +7,7 @@
 //! - [`Theme.qml`](https://github.com/duxlabs-dev/dux-qml-common/blob/c6e4a6bce24b804688225b0889410d2ec0ae06d7/Common/Theme.qml): 应用主题覆盖的焦点环偏移。
 //! - [`StyledText.qml`](https://github.com/duxlabs-dev/dux-qml-common/blob/c6e4a6bce24b804688225b0889410d2ec0ae06d7/DCommon/Widgets/StyledText.qml): 行高实现。
 //! - [`StateLayer.qml`](https://github.com/duxlabs-dev/dux-qml-common/blob/c6e4a6bce24b804688225b0889410d2ec0ae06d7/DCommon/Widgets/StateLayer.qml): state layer 的合成。
+//! - [`DSpinner.qml`](https://github.com/duxlabs-dev/dux-qml-common/blob/c6e4a6bce24b804688225b0889410d2ec0ae06d7/DCommon/Widgets/DSpinner.qml): spinner 线宽下限。
 //! - [`type-scale-tokens`](https://m3.material.io/styles/typography/type-scale-tokens): BodyMedium 行高。
 //!
 //! 这里的单位是 egui 的 point（逻辑像素）。非整数缩放下由 egui 统一乘
@@ -67,6 +68,9 @@ pub const STATE_PRESSED: f32 = 0.12;
 pub const OUTLINE_WIDTH: f32 = 1.0;
 pub const FOCUS_RING_WIDTH: f32 = 1.5;
 pub const FOCUS_RING_OFFSET: f32 = 3.0;
+
+/// Spinner 最小线宽。来源: `DSpinner.qml` 的 `strokeWidth` 默认值。
+pub const SPINNER_STROKE_WIDTH: f32 = 2.0;
 
 /// 圆角阶梯。来源: `Shape.js` 的 `corners`。
 pub const CORNER_XXS: u8 = 2;
