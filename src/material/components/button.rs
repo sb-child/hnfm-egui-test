@@ -14,7 +14,7 @@ use std::sync::Arc;
 
 use egui::{
     Align2, Color32, CornerRadius, FontId, Id, Painter, Pos2, Rect, Stroke, StrokeKind, Ui, Vec2,
-    text::Galley,
+    emath::TSTransform, layers::ShapeIdx, text::Galley,
 };
 
 use crate::fonts::ff_sans;
@@ -144,9 +144,12 @@ pub struct Button<'a> {
     shape: ButtonShape,
     width: ButtonWidth,
     maximum_width: f32,
+    background_color: Option<Color32>,
+    text_color: Option<Color32>,
     reserve_text: Option<&'a str>,
     text_wrap: TextWrap,
     busy: bool,
+    enable_scale_animation: bool,
     enabled: bool,
     motion: Option<MotionPrefs>,
 }
@@ -166,9 +169,12 @@ impl<'a> Button<'a> {
             shape: ButtonShape::Round,
             width: ButtonWidth::Hug,
             maximum_width: f32::INFINITY,
+            background_color: None,
+            text_color: None,
             reserve_text: None,
             text_wrap: TextWrap::SingleLine,
             busy: false,
+            enable_scale_animation: false,
             enabled: true,
             motion: None,
         }
@@ -226,6 +232,20 @@ impl<'a> Button<'a> {
         self
     }
 
+    /// 覆盖启用态背景色。禁用态仍使用变体颜色。
+    /// 来源: `DButton.qml` 的 `backgroundColor`。
+    pub fn background_color(mut self, color: impl Into<Color32>) -> Self {
+        self.background_color = Some(color.into());
+        self
+    }
+
+    /// 覆盖启用态文字色，state layer 也跟随它。禁用态仍使用变体颜色。
+    /// 来源: `DButton.qml` 的 `textColor`。
+    pub fn text_color(mut self, color: impl Into<Color32>) -> Self {
+        self.text_color = Some(color.into());
+        self
+    }
+
     pub fn icon(mut self, icon: &'a str) -> Self {
         self.icon = Some(icon);
         self
@@ -247,6 +267,12 @@ impl<'a> Button<'a> {
     /// busy 时 icon 槽显示 spinner。来源: `DButton.qml` 的 `busy`。
     pub fn busy(mut self, busy: bool) -> Self {
         self.busy = busy;
+        self
+    }
+
+    /// 按下时缩放。来源: `DButton.qml` 的 `enableScaleAnimation`。
+    pub fn enable_scale_animation(mut self, enabled: bool) -> Self {
+        self.enable_scale_animation = enabled;
         self
     }
 
@@ -283,17 +309,38 @@ impl<'a> Button<'a> {
         let id = Id::unique(self.key);
         let hit = hit_rounded(ui, id, rect, radius_rest, enabled);
 
-        let colors = button_colors(theme.scheme(), self.variant, enabled);
+        let colors = button_colors(
+            theme.scheme(),
+            self.variant,
+            enabled,
+            self.background_color,
+            self.text_color,
+        );
         let anim = transitions(ui, id, &hit, enabled, prefs);
         let radius = interpolate::lerp_corner_radius(radius_rest, radius_pressed, anim.shape);
         let layer_alpha = state_layer::alpha(anim.hover, anim.press, anim.focus);
         let spinner_elapsed = motion::looping_seconds(ui, id.with("spinner"), self.busy, prefs);
+        let scale = press_scale(
+            ui,
+            id,
+            enabled && hit.pressed(),
+            prefs,
+            self.enable_scale_animation,
+        );
+        let focused = hit.focused();
 
-        let painter = ui.painter();
-        paint_surface(painter, rect, radius, &colors, layer_alpha);
-        self.paint_content(painter, rect, &metrics, &colors, spinner_elapsed);
-        if hit.focused() {
-            paint_focus_ring(painter, rect, radius, &colors);
+        let paint = |painter: &Painter| {
+            paint_surface(painter, rect, radius, &colors, layer_alpha);
+            self.paint_content(painter, rect, &metrics, &colors, spinner_elapsed);
+            if focused {
+                paint_focus_ring(painter, rect, radius, &colors);
+            }
+        };
+
+        if scale == 1.0 {
+            paint(ui.painter());
+        } else {
+            paint_transformed(ui, press_transform(rect, scale), paint);
         }
 
         hit
@@ -503,6 +550,49 @@ fn transitions(ui: &Ui, id: Id, hit: &Hit, enabled: bool, prefs: MotionPrefs) ->
     }
 }
 
+/// 按压缩放进度。来源: `DButton.qml` 的 `scale` 与 `Behavior on scale`。
+fn press_scale(ui: &Ui, id: Id, pressed: bool, prefs: MotionPrefs, animate: bool) -> f32 {
+    if !animate {
+        return 1.0;
+    }
+    let progress = motion::animate01(
+        ui,
+        id.with("scale"),
+        pressed,
+        Motion::EXPRESSIVE_FAST_SPATIAL,
+        prefs,
+    );
+    scale_from_progress(progress)
+}
+
+fn scale_from_progress(progress: f32) -> f32 {
+    1.0 + (tokens::PRESS_SCALE - 1.0) * progress
+}
+
+/// 围绕控件中心缩放。输入命中仍使用原始 rect。
+fn press_transform(rect: Rect, scale: f32) -> TSTransform {
+    TSTransform::from_translation(rect.center().to_vec2() * (1.0 - scale))
+        * TSTransform::from_scaling(scale)
+}
+
+/// 只变换本次绘制产生的 shape，不创建子 UI，也不移动布局游标。
+fn paint_transformed(ui: &Ui, transform: TSTransform, paint: impl FnOnce(&Painter)) {
+    let layer_id = ui.layer_id();
+    let start = ui.ctx().graphics_mut(|graphics| {
+        graphics
+            .get(layer_id)
+            .map_or(ShapeIdx(0), |list| list.next_idx())
+    });
+
+    paint(ui.painter());
+
+    ui.ctx().graphics_mut(|graphics| {
+        let list = graphics.entry(layer_id);
+        let end = list.next_idx();
+        list.transform_range(start, end, transform);
+    });
+}
+
 fn paint_surface(
     painter: &Painter,
     rect: Rect,
@@ -547,7 +637,13 @@ struct ButtonColors {
 /// - `buttons/specs`: 变体颜色映射。
 /// - `DButton.qml`: `backgroundColor` / `textColor`。
 /// - `StateLayer.qml`: state color。
-fn button_colors(scheme: &Scheme, variant: ButtonVariant, enabled: bool) -> ButtonColors {
+fn button_colors(
+    scheme: &Scheme,
+    variant: ButtonVariant,
+    enabled: bool,
+    background_override: Option<Color32>,
+    text_override: Option<Color32>,
+) -> ButtonColors {
     let primary: Color32 = scheme.primary.into();
     let on_primary: Color32 = scheme.on_primary.into();
     let secondary_container: Color32 = scheme.secondary_container.into();
@@ -593,6 +689,9 @@ fn button_colors(scheme: &Scheme, variant: ButtonVariant, enabled: bool) -> Butt
         ButtonVariant::Outlined => (Color32::TRANSPARENT, primary, outline),
         ButtonVariant::Text => (Color32::TRANSPARENT, primary, Color32::TRANSPARENT),
     };
+
+    let background = background_override.unwrap_or(background);
+    let text = text_override.unwrap_or(text);
 
     ButtonColors {
         background,
@@ -653,15 +752,98 @@ mod tests {
             .horizontal_padding(10.0)
             .icon_size(18.0)
             .maximum_width(200.0)
+            .background_color(Color32::RED)
+            .text_color(Color32::BLUE)
             .reserve_text("reserved")
-            .text_wrap(TextWrap::MultiLine);
+            .text_wrap(TextWrap::MultiLine)
+            .enable_scale_animation(true);
 
         assert_eq!(button.minimum_width, 100.0);
         assert_eq!(button.horizontal_padding, Some(10.0));
         assert_eq!(button.icon_size, Some(18.0));
         assert_eq!(button.maximum_width, 200.0);
+        assert_eq!(button.background_color, Some(Color32::RED));
+        assert_eq!(button.text_color, Some(Color32::BLUE));
         assert_eq!(button.reserve_text, Some("reserved"));
         assert_eq!(button.text_wrap, TextWrap::MultiLine);
+        assert!(button.enable_scale_animation);
+    }
+
+    #[test]
+    fn color_overrides_replace_enabled_variant_colors() {
+        let theme =
+            crate::material::color::generate_theme(crate::material::color::ThemeVariant::Cmf {
+                primary: 0xff769CDF,
+                secondary: None,
+            });
+        let scheme = crate::material::color::ThemeMode::Dark.scheme(&theme);
+        let colors = button_colors(
+            scheme,
+            ButtonVariant::Outlined,
+            true,
+            Some(Color32::RED),
+            Some(Color32::BLUE),
+        );
+
+        assert_eq!(colors.background, Color32::RED);
+        assert_eq!(colors.text, Color32::BLUE);
+        assert_eq!(colors.state, Color32::BLUE);
+        assert_eq!(colors.border, scheme.outline.into());
+    }
+
+    #[test]
+    fn disabled_colors_ignore_overrides() {
+        let theme =
+            crate::material::color::generate_theme(crate::material::color::ThemeVariant::Cmf {
+                primary: 0xff769CDF,
+                secondary: None,
+            });
+        let scheme = crate::material::color::ThemeMode::Dark.scheme(&theme);
+        let colors = button_colors(
+            scheme,
+            ButtonVariant::Text,
+            false,
+            Some(Color32::RED),
+            Some(Color32::BLUE),
+        );
+
+        assert_eq!(colors.background, Color32::TRANSPARENT);
+        assert_eq!(colors.text, with_alpha(scheme.on_surface.into(), 0.38));
+    }
+
+    #[test]
+    fn scale_progress_maps_to_press_scale() {
+        assert_eq!(scale_from_progress(0.0), 1.0);
+        assert_eq!(scale_from_progress(1.0), tokens::PRESS_SCALE);
+        assert!((scale_from_progress(0.5) - 0.99).abs() < 1e-6);
+    }
+
+    #[test]
+    fn press_transform_scales_around_center() {
+        let rect = Rect::from_min_size(Pos2::ZERO, Vec2::new(100.0, 40.0));
+        let transform = press_transform(rect, tokens::PRESS_SCALE);
+        let center = transform * rect.center();
+        let corner = transform * rect.left_top();
+
+        assert!((center - rect.center()).length() < 1e-5);
+        assert!((corner - rect.center()).length() < (rect.left_top() - rect.center()).length());
+    }
+
+    #[test]
+    fn transformed_painting_does_not_move_layout_cursor() {
+        let context = egui::Context::default();
+        let mut output = context.run_ui(Default::default(), |ui| {
+            let before = ui.cursor();
+            paint_transformed(ui, TSTransform::from_scaling(0.98), |painter| {
+                painter.rect_filled(
+                    Rect::from_min_size(Pos2::ZERO, Vec2::splat(10.0)),
+                    CornerRadius::ZERO,
+                    Color32::RED,
+                );
+            });
+            assert_eq!(ui.cursor(), before);
+        });
+        output.textures_delta.clear();
     }
 
     fn measure(button: &Button<'_>) -> ButtonMetrics {

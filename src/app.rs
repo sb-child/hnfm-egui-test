@@ -63,6 +63,7 @@ fn content(m: &mut material::M3Ui<'_>, demo_clicks: &mut u32) {
                 if m.button("btn_filled", "填充按钮")
                     .variant(ButtonVariant::Filled)
                     .icon("+")
+                    .enable_scale_animation(true)
                     .show(m)
                     .clicked()
                 {
@@ -76,6 +77,11 @@ fn content(m: &mut material::M3Ui<'_>, demo_clicks: &mut u32) {
                     .show(m);
                 m.button("btn_text", "文本按钮")
                     .variant(ButtonVariant::Text)
+                    .show(m);
+                m.button("btn_color", "自定义颜色")
+                    .variant(ButtonVariant::Tonal)
+                    .background_color(egui::Color32::from_rgb(98, 0, 238))
+                    .text_color(egui::Color32::WHITE)
                     .show(m);
                 m.button("btn_disabled", "禁用")
                     .variant(ButtonVariant::Filled)
@@ -96,6 +102,7 @@ fn content(m: &mut material::M3Ui<'_>, demo_clicks: &mut u32) {
                 m.button("btn_wrap", "多行按钮文本，用来验证 wrapText 的高度")
                     .width(ButtonWidth::Fixed(160.0))
                     .text_wrap(TextWrap::MultiLine)
+                    .enable_scale_animation(true)
                     .show(m);
                 m.button("btn_reserve", "保存")
                     .reserve_text("保存中...")

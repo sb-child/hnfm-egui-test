@@ -190,10 +190,10 @@ impl Motion {
     };
 }
 
-/// 把归一化目标值推进成带曲线的当前值。
+/// 把 0 或 1 的目标值推进成带曲线的当前值。
 ///
-/// `target` 应在 0..1；需要像素值时先用进度插值。`id` 必须稳定，
-/// 例如从组件 key 派生 `id.with("hover")`。
+/// 只适合二值过渡。需要按进度插值像素值或缩放值时，先用
+/// [`animate01`] 得到 0..1 进度再插值。`id` 必须稳定。
 pub fn animate(ui: &Ui, id: Id, target: f32, motion: Motion, prefs: MotionPrefs) -> f32 {
     let motion = prefs.effective(motion);
     if motion.duration <= 0.0 {
@@ -209,8 +209,25 @@ pub fn animate(ui: &Ui, id: Id, target: f32, motion: Motion, prefs: MotionPrefs)
 /// 把布尔目标推进成带曲线的 0..1 进度。
 ///
 /// `id` 必须稳定，例如从组件 key 派生 `id.with("hover")`。
+/// 反向过渡使用反向曲线，和 QML `Behavior` 的缓动方向一致。
 pub fn animate01(ui: &Ui, id: Id, active: bool, motion: Motion, prefs: MotionPrefs) -> f32 {
-    animate(ui, id, if active { 1.0 } else { 0.0 }, motion, prefs)
+    let motion = prefs.effective(motion);
+    if motion.duration <= 0.0 {
+        return if active { 1.0 } else { 0.0 };
+    }
+
+    let linear =
+        ui.ctx()
+            .animate_value_with_time(id, if active { 1.0 } else { 0.0 }, motion.duration);
+    ease01(linear, active, motion.curve)
+}
+
+fn ease01(linear: f32, active: bool, curve: Curve) -> f32 {
+    if active {
+        curve.eval(linear)
+    } else {
+        1.0 - curve.eval(1.0 - linear)
+    }
 }
 
 /// 返回无限循环动画已经运行的秒数。
@@ -281,6 +298,13 @@ mod tests {
             .map(|step| Curve::EXPRESSIVE_FAST_SPATIAL.eval(step as f32 / 100.0))
             .fold(f32::MIN, f32::max);
         assert!(peak > 1.0);
+    }
+
+    #[test]
+    fn reverse_transition_uses_reverse_curve() {
+        assert_eq!(ease01(1.0, false, Curve::STANDARD), 1.0);
+        assert_eq!(ease01(0.0, false, Curve::STANDARD), 0.0);
+        assert!((ease01(0.5, false, Curve::LINEAR) - 0.5).abs() < 1e-3);
     }
 
     #[test]

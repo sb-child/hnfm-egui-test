@@ -51,6 +51,9 @@ pub const BUTTON_HEIGHT_S: f32 = 40.0;
 pub const BUTTON_HEIGHT_M: f32 = 56.0;
 pub const BUTTON_MIN_WIDTH: f32 = 58.0;
 
+/// 按钮按压缩放。来源: `Theme.qml` 的 `pressScale`。
+pub const PRESS_SCALE: f32 = 0.98;
+
 /// State layer 透明度。
 ///
 /// 来源:
