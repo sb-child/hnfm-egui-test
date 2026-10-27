@@ -14,14 +14,15 @@ use std::sync::Arc;
 
 use egui::{
     Align2, Color32, CornerRadius, FontId, Id, Painter, Pos2, Rect, Stroke, StrokeKind, Ui, Vec2,
-    text::{Galley, LayoutJob, TextFormat, TextWrapping},
+    text::Galley,
 };
 
 use crate::fonts::ff_sans;
 use crate::material::color;
 use crate::material::interact::{Hit, hit_rounded};
-use crate::material::motion::{self, Motion};
+use crate::material::motion::{self, Motion, MotionPrefs};
 use crate::material::state_layer;
+use crate::material::text::{self, TextLayout, TextStyle};
 use crate::material::tokens;
 use crate::material::util;
 
@@ -128,6 +129,7 @@ pub struct Button<'a> {
     shape: ButtonShape,
     width: ButtonWidth,
     enabled: bool,
+    motion: MotionPrefs,
 }
 
 impl<'a> Button<'a> {
@@ -141,6 +143,7 @@ impl<'a> Button<'a> {
             shape: ButtonShape::Round,
             width: ButtonWidth::Hug,
             enabled: true,
+            motion: MotionPrefs::DEFAULT,
         }
     }
 
@@ -174,6 +177,12 @@ impl<'a> Button<'a> {
         self
     }
 
+    /// 动效偏好。默认 [`MotionPrefs::DEFAULT`]。
+    pub fn motion(mut self, motion: MotionPrefs) -> Self {
+        self.motion = motion;
+        self
+    }
+
     pub fn ui(self, ui: &mut Ui) -> Hit {
         let enabled = self.enabled && ui.is_enabled();
         let metrics = self.measure(ui);
@@ -191,7 +200,7 @@ impl<'a> Button<'a> {
         let hit = hit_rounded(ui, id, rect, radius_rest, enabled);
 
         let colors = button_colors(self.variant, enabled);
-        let anim = transitions(ui, id, &hit, enabled);
+        let anim = transitions(ui, id, &hit, enabled, self.motion);
         let radius = util::lerp_corner_radius(radius_rest, radius_pressed, anim.shape);
         let layer_alpha = state_layer::alpha(anim.hover, anim.press, anim.focus);
 
@@ -212,13 +221,10 @@ impl<'a> Button<'a> {
         let spacing = self.size.content_spacing();
         let icon_size = self.size.icon_size();
 
-        let label = layout_label(
+        let label = text::layout_text(
             ui,
             self.label,
-            tokens::FONT_SIZE_MEDIUM,
-            tokens::FONT_WEIGHT_MEDIUM,
-            tokens::LINE_HEIGHT_MEDIUM,
-            f32::INFINITY,
+            TextLayout::single_line(TextStyle::BUTTON, f32::INFINITY),
         );
         let icon_width = if self.icon.is_some() {
             icon_size + spacing
@@ -267,13 +273,10 @@ impl<'a> Button<'a> {
         let label = if metrics.label.size().x <= label_max_width {
             metrics.label.clone()
         } else {
-            layout_label(
+            text::layout_text(
                 ui,
                 self.label,
-                tokens::FONT_SIZE_MEDIUM,
-                tokens::FONT_WEIGHT_MEDIUM,
-                tokens::LINE_HEIGHT_MEDIUM,
-                label_max_width,
+                TextLayout::single_line(TextStyle::BUTTON, label_max_width),
             )
         };
 
@@ -318,7 +321,7 @@ struct ButtonAnim {
     shape: f32,
 }
 
-fn transitions(ui: &Ui, id: Id, hit: &Hit, enabled: bool) -> ButtonAnim {
+fn transitions(ui: &Ui, id: Id, hit: &Hit, enabled: bool, prefs: MotionPrefs) -> ButtonAnim {
     if !enabled {
         return ButtonAnim {
             hover: 0.0,
@@ -333,20 +336,29 @@ fn transitions(ui: &Ui, id: Id, hit: &Hit, enabled: bool) -> ButtonAnim {
             id.with("hover"),
             hit.hovered(),
             Motion::EXPRESSIVE_EFFECTS,
+            prefs,
         ),
         press: motion::animate01(
             ui,
             id.with("press"),
             hit.pressed(),
             Motion::EXPRESSIVE_EFFECTS,
+            prefs,
         ),
         focus: motion::animate01(
             ui,
             id.with("focus"),
             hit.focused(),
             Motion::EXPRESSIVE_EFFECTS,
+            prefs,
         ),
-        shape: motion::animate01(ui, id.with("shape"), hit.pressed(), Motion::SHAPE_CHANGE),
+        shape: motion::animate01(
+            ui,
+            id.with("shape"),
+            hit.pressed(),
+            Motion::SHAPE_CHANGE,
+            prefs,
+        ),
     }
 }
 
@@ -468,37 +480,6 @@ fn with_alpha(color: Color32, alpha: f32) -> Color32 {
         color.b(),
         (alpha * 255.0).round().clamp(0.0, 255.0) as u8,
     )
-}
-
-/// 单行文本布局。`max_width = f32::INFINITY` 时用于 Hug 测量。
-/// 颜色固定为 PLACEHOLDER，绘制时由 `Painter::galley` 的 fallback color 提供。
-fn layout_label(
-    ui: &Ui,
-    text: &str,
-    font_size: f32,
-    weight: f32,
-    line_height: f32,
-    max_width: f32,
-) -> Arc<Galley> {
-    let mut job = LayoutJob::default();
-    job.append(
-        text,
-        0.0,
-        TextFormat {
-            font_id: FontId::new(font_size, ff_sans()),
-            color: Color32::PLACEHOLDER,
-            line_height: Some(line_height),
-            coords: egui::epaint::text::VariationCoords::new([(b"wght", weight)]),
-            ..Default::default()
-        },
-    );
-    job.wrap = TextWrapping {
-        max_width,
-        max_rows: 1,
-        overflow_character: Some('…'),
-        break_anywhere: false,
-    };
-    ui.fonts_mut(|f| f.layout_job(job))
 }
 
 #[cfg(test)]

@@ -4,12 +4,14 @@ pub mod color;
 pub mod interact;
 pub mod motion;
 pub mod state_layer;
+pub mod text;
 pub mod tokens;
 pub mod util;
 
 pub use button::{Button, ButtonShape, ButtonSize, ButtonVariant, ButtonWidth};
 pub use card::{Card, CardTone, CardWidth};
 pub use interact::{Hit, Interaction};
+pub use motion::{AnimationSpeed, Curve, Motion, MotionPrefs};
 
 use egui::Color32;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};

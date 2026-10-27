@@ -21,6 +21,33 @@ material3 规范：
 
 规范用于理解语义和可访问性；与 `dux-qml-common` 的实际行为冲突时，以 `dux-qml-common` 为准。
 
+## Button 依赖树
+
+`DButton` 的直接和间接依赖：
+
+- `StyledButton`
+  - `FocusRing`
+  - Qt 的键盘、焦点、RTL、Accessibility
+- `StateLayer`
+  - `DRipple`
+  - `DTooltipHost` -> `DTooltipV2`
+  - `DAnim`
+- `StyledText` -> `Style`、`Appearance`
+- `DIcon` -> `StyledText`、`Fonts`
+- `DSpinner` -> `Anims`
+- `DAnim` -> `Style`
+- `Style` -> `Shape.js`、`Surface.js`、`Contrast.js`、`Accents.js`、`Theme`、`SettingsData`
+
+Rust 侧对应：
+
+- `tokens.rs`: `Style` / `Appearance` / `Shape.js` 的尺寸、圆角、state alpha。
+- `text.rs`: `StyledText` / `StyledTextMetrics`。
+- `motion.rs`: `DAnim` / `Anims`。
+- `interact.rs`: `StyledButton` 的命中与交互状态。
+- `state_layer.rs`: `StateLayer`。
+- `button.rs`: `DButton`。
+- 待建：`icon.rs`、`spinner.rs`、`ripple.rs`、`tooltip.rs`、显式 `Theme` / `M3Ui`。
+
 ## 组件契约
 
 原则：mechanics 可以隐藏，policy 必须显式。
@@ -39,7 +66,8 @@ material3 规范：
 ### 动画
 
 - `Motion` 是数据：时长 + 可采样的 `Curve`。
-- 一个 `animate` driver；目标值是 f32，不是 bool。
+- `MotionPrefs { reduce_motion, speed }` 每帧显式传入；`effective()` 统一把动效降为 `Motion::NONE`。
+- 一个 `animate` driver；目标值是 f32，不是 bool。`animate01` 只是布尔包装。
 - 组件自持交互状态和动画，调用方只传业务状态。
 - 动画只改绘制：颜色、圆角、alpha、scale、ripple。
 - 不要动画：分配宽高、兄弟节点位置、滚动内容高度。展开/收起由显式 `open: bool` 驱动。

@@ -4,7 +4,8 @@
 //!
 //! 来源（dux-qml-common commit `c6e4a6b`）:
 //! - [`Style.qml`](https://github.com/duxlabs-dev/dux-qml-common/blob/c6e4a6bce24b804688225b0889410d2ec0ae06d7/DCommon/Common/Style.qml): `expressiveCurves` / `expressiveDurations`。
-//! - [`StateLayer.qml`](https://github.com/duxlabs-dev/dux-qml-common/blob/c6e4a6bce24b804688225b0889410d2ec0ae06d7/DCommon/Widgets/StateLayer.qml): 默认 50ms `standardDecel`。
+//! - [`StateLayer.qml`](https://github.com/duxlabs-dev/dux-qml-common/blob/c6e4a6bce24b804688225b0889410d2ec0ae06d7/DCommon/Widgets/StateLayer.qml): 默认 `shorterDuration` + `standardDecel`。
+//! - [`Theme.qml`](https://github.com/duxlabs-dev/dux-qml-common/blob/c6e4a6bce24b804688225b0889410d2ec0ae06d7/Common/Theme.qml): `shorterDuration` 实际值 100ms。
 //! - [`DButton.qml`](https://github.com/duxlabs-dev/dux-qml-common/blob/c6e4a6bce24b804688225b0889410d2ec0ae06d7/DCommon/Widgets/DButton.qml): 200ms `standard` 与 350ms `expressiveFastSpatial`。
 //! - [`DRipple.qml`](https://github.com/duxlabs-dev/dux-qml-common/blob/c6e4a6bce24b804688225b0889410d2ec0ae06d7/DCommon/Widgets/DRipple.qml): 500ms。
 
@@ -83,6 +84,55 @@ impl Curve {
     }
 }
 
+/// 动效速度档位。
+///
+/// 来源: `Style.qml` 的 `AnimationSpeed` 枚举。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum AnimationSpeed {
+    None,
+    #[default]
+    Short,
+    Medium,
+    Long,
+    Custom,
+}
+
+impl AnimationSpeed {
+    fn enabled(self) -> bool {
+        !matches!(self, Self::None)
+    }
+}
+
+/// 动效偏好。每帧由调用方显式传入。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MotionPrefs {
+    pub reduce_motion: bool,
+    pub speed: AnimationSpeed,
+}
+
+impl MotionPrefs {
+    /// 正常动效。来源: `Style.qml` 的 `currentAnimationSpeed` 默认值。
+    pub const DEFAULT: Self = Self {
+        reduce_motion: false,
+        speed: AnimationSpeed::Short,
+    };
+
+    /// 关闭所有动效。
+    pub const NONE: Self = Self {
+        reduce_motion: true,
+        speed: AnimationSpeed::None,
+    };
+
+    /// 按偏好返回实际使用的动效；关闭时返回 [`Motion::NONE`]。
+    pub fn effective(self, motion: Motion) -> Motion {
+        if self.reduce_motion || !self.speed.enabled() {
+            Motion::NONE
+        } else {
+            motion
+        }
+    }
+}
+
 /// 把源文件里的毫秒值转换成秒。只在编译期使用。
 const fn ms(milliseconds: f32) -> f32 {
     milliseconds / 1000.0
@@ -103,9 +153,9 @@ impl Motion {
         curve: Curve::LINEAR,
     };
 
-    /// State layer 的透明度过渡。来源: `StateLayer.qml` 默认值。
+    /// State layer 的透明度过渡。来源: `Theme.qml` 的 `shorterDuration`。
     pub const SHORTER: Self = Self {
-        duration: ms(50.0),
+        duration: ms(100.0),
         curve: Curve::STANDARD_DECEL,
     };
 
@@ -134,11 +184,12 @@ impl Motion {
     };
 }
 
-/// 把布尔目标推进成带曲线的 0..1 进度。
+/// 把归一化目标值推进成带曲线的当前值。
 ///
-/// `id` 必须稳定，例如从组件 key 派生 `id.with("hover")`。
-pub fn animate01(ui: &Ui, id: Id, active: bool, motion: Motion) -> f32 {
-    let target = if active { 1.0 } else { 0.0 };
+/// `target` 应在 0..1；需要像素值时先用进度插值。`id` 必须稳定，
+/// 例如从组件 key 派生 `id.with("hover")`。
+pub fn animate(ui: &Ui, id: Id, target: f32, motion: Motion, prefs: MotionPrefs) -> f32 {
+    let motion = prefs.effective(motion);
     if motion.duration <= 0.0 {
         return target;
     }
@@ -147,6 +198,13 @@ pub fn animate01(ui: &Ui, id: Id, active: bool, motion: Motion) -> f32 {
         .ctx()
         .animate_value_with_time(id, target, motion.duration);
     motion.curve.eval(linear)
+}
+
+/// 把布尔目标推进成带曲线的 0..1 进度。
+///
+/// `id` 必须稳定，例如从组件 key 派生 `id.with("hover")`。
+pub fn animate01(ui: &Ui, id: Id, active: bool, motion: Motion, prefs: MotionPrefs) -> f32 {
+    animate(ui, id, if active { 1.0 } else { 0.0 }, motion, prefs)
 }
 
 #[cfg(test)]
@@ -180,7 +238,7 @@ mod tests {
     #[test]
     fn durations_are_stored_in_seconds() {
         assert_eq!(Motion::NONE.duration, 0.0);
-        assert!((Motion::SHORTER.duration - 0.05).abs() < 1e-6);
+        assert!((Motion::SHORTER.duration - 0.1).abs() < 1e-6);
         assert!((Motion::EXPRESSIVE_EFFECTS.duration - 0.2).abs() < 1e-6);
         assert!((Motion::SHAPE_CHANGE.duration - 0.2).abs() < 1e-6);
         assert!((Motion::EXPRESSIVE_FAST_SPATIAL.duration - 0.35).abs() < 1e-6);
@@ -193,5 +251,35 @@ mod tests {
             .map(|step| Curve::EXPRESSIVE_FAST_SPATIAL.eval(step as f32 / 100.0))
             .fold(f32::MIN, f32::max);
         assert!(peak > 1.0);
+    }
+
+    #[test]
+    fn default_prefs_keep_motion() {
+        assert_eq!(
+            MotionPrefs::DEFAULT.effective(Motion::SHAPE_CHANGE),
+            Motion::SHAPE_CHANGE
+        );
+    }
+
+    #[test]
+    fn reduced_motion_disables_animation() {
+        assert_eq!(
+            MotionPrefs::NONE.effective(Motion::SHAPE_CHANGE),
+            Motion::NONE
+        );
+        let prefs = MotionPrefs {
+            reduce_motion: true,
+            speed: AnimationSpeed::Short,
+        };
+        assert_eq!(prefs.effective(Motion::SHAPE_CHANGE), Motion::NONE);
+    }
+
+    #[test]
+    fn speed_none_disables_animation() {
+        let prefs = MotionPrefs {
+            reduce_motion: false,
+            speed: AnimationSpeed::None,
+        };
+        assert_eq!(prefs.effective(Motion::SHAPE_CHANGE), Motion::NONE);
     }
 }

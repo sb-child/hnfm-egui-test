@@ -62,10 +62,10 @@ pub const STATE_PRESSED: f32 = 0.12;
 /// 描边与焦点环。
 ///
 /// 来源:
-/// - `Theme.qml`: `FOCUS_RING_OFFSET` 的实际值 3。
-/// - `Style.qml`: fallback 值 4。
+/// - `Theme.qml`: `focusRingWidth` 1.5，`focusRingOffset` 3。
+/// - `Style.qml`: fallback width 2，offset 4。
 pub const OUTLINE_WIDTH: f32 = 1.0;
-pub const FOCUS_RING_WIDTH: f32 = 2.0;
+pub const FOCUS_RING_WIDTH: f32 = 1.5;
 pub const FOCUS_RING_OFFSET: f32 = 3.0;
 
 /// 圆角阶梯。来源: `Shape.js` 的 `corners`。

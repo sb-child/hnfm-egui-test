@@ -1,4 +1,4 @@
-use egui::{RichText, Stroke, Vec2, Widget};
+use egui::{RichText, Stroke, Vec2};
 
 use crate::material::color::ThemeVariant;
 use crate::{
