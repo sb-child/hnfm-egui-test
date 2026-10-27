@@ -16,6 +16,7 @@ pub struct AppLayout {
     active_3: bool,
     active_opt: u8,
     sidebar_state: SidebarState,
+    demo_clicks: u32,
 }
 
 impl AppLayout {
@@ -37,6 +38,7 @@ impl AppLayout {
             active_3: false,
             active_opt: 0,
             sidebar_state: SidebarState::new(Some(RailId::Files)),
+            demo_clicks: 0,
         }
     }
 }
@@ -59,7 +61,9 @@ impl eframe::App for AppLayout {
         // 状态栏
         egui::Panel::bottom("bottom-statusbar")
             .resizable(false)
-            .show(ui, |ui| bottom_statusbar(ui, &self.sidebar_state, screen_width));
+            .show(ui, |ui| {
+                bottom_statusbar(ui, &self.sidebar_state, screen_width)
+            });
 
         // 导航栏
         let mut hovered_rail = None;
@@ -81,17 +85,18 @@ impl eframe::App for AppLayout {
 
         // 统一状态机更新
         let now = std::time::Instant::now();
-        if let Some(delay) = self.sidebar_state.refresh(
-            ui.ctx(),
-            screen_width,
-            now,
-            hovered_rail,
-        ) {
+        if let Some(delay) = self
+            .sidebar_state
+            .refresh(ui.ctx(), screen_width, now, hovered_rail)
+        {
             ui.ctx().request_repaint_after(delay);
         }
 
         // 渲染 Pinned 面板
-        if matches!(self.sidebar_state.render_mode(), sidebar::RenderMode::Pinned(_)) {
+        if matches!(
+            self.sidebar_state.render_mode(),
+            sidebar::RenderMode::Pinned(_)
+        ) {
             egui::Panel::left("sidebar")
                 .frame(surface_frame)
                 .resizable(false)
@@ -124,7 +129,7 @@ impl eframe::App for AppLayout {
             .show_collapsible(ui, &mut self.terminal_expanded, terminal);
 
         // 内容区
-        egui::CentralPanel::default().show(ui, content);
+        egui::CentralPanel::default().show(ui, |ui| content(ui, &mut self.demo_clicks));
 
         // 主题
         if self.active_1 != self.active_1_before {
@@ -274,7 +279,55 @@ fn terminal(ui: &mut egui::Ui) {
     });
 }
 
-fn content(ui: &mut egui::Ui) {
+fn content(ui: &mut egui::Ui, demo_clicks: &mut u32) {
+    ui.heading("M3 Button");
+    ui.horizontal_wrapped(|ui| {
+        if material::Button::new("btn_filled", "填充按钮")
+            .variant(material::ButtonVariant::Filled)
+            .icon("+")
+            .ui(ui)
+            .clicked()
+        {
+            *demo_clicks += 1;
+        }
+        material::Button::new("btn_tonal", "色调按钮")
+            .variant(material::ButtonVariant::Tonal)
+            .ui(ui);
+        material::Button::new("btn_outlined", "描边按钮")
+            .variant(material::ButtonVariant::Outlined)
+            .ui(ui);
+        material::Button::new("btn_text", "文本按钮")
+            .variant(material::ButtonVariant::Text)
+            .ui(ui);
+        material::Button::new("btn_disabled", "禁用")
+            .variant(material::ButtonVariant::Filled)
+            .enabled(false)
+            .ui(ui);
+    });
+
+    ui.horizontal_wrapped(|ui| {
+        material::Button::new("btn_xs", "XS")
+            .size(material::ButtonSize::Xs)
+            .ui(ui);
+        material::Button::new("btn_s", "S")
+            .size(material::ButtonSize::S)
+            .ui(ui);
+        material::Button::new("btn_m", "M")
+            .size(material::ButtonSize::M)
+            .ui(ui);
+        material::Button::new("btn_square", "方角")
+            .shape(material::ButtonShape::Square)
+            .ui(ui);
+    });
+
+    material::Button::new("btn_fill", "Fill 宽度")
+        .variant(material::ButtonVariant::Tonal)
+        .width(material::ButtonWidth::Fill)
+        .ui(ui);
+
+    ui.label(format!("Button clicks: {}", *demo_clicks));
+
+    ui.add_space(15.0);
     let t = "egui 支持可变字体，可以通过 VariationCoords 控制粗细等属性。查看示例 font_variations";
     ui.heading("Top Heading");
 

@@ -80,9 +80,7 @@ enum SidebarInner {
         hover_rail: RailId,
     },
     /// Click 触发后的 overlay（可见，不自动关）
-    FlyoutClick {
-        active_rail: RailId,
-    },
+    FlyoutClick { active_rail: RailId },
 }
 
 impl SidebarInner {
@@ -245,8 +243,7 @@ impl SidebarState {
                     is_user_pinned: *is_user_pinned,
                 }
             }
-            SidebarInner::FlyoutHover { .. }
-            | SidebarInner::FlyoutHoverPending { .. } => {
+            SidebarInner::FlyoutHover { .. } | SidebarInner::FlyoutHoverPending { .. } => {
                 SidebarInner::FlyoutClick { active_rail: rail }
             }
             SidebarInner::FlyoutClick { .. } => {
@@ -263,11 +260,7 @@ impl SidebarState {
     }
 
     /// Hover 触发的 Flyout 离开联合区域（rail + flyout）时自动关闭。
-    pub fn check_flyout_leave(
-        &mut self,
-        ctx: &egui::Context,
-        content_rect: egui::Rect,
-    ) {
+    pub fn check_flyout_leave(&mut self, ctx: &egui::Context, content_rect: egui::Rect) {
         let active_rail = match &self.inner {
             SidebarInner::FlyoutHover { active_rail, .. } => *active_rail,
             _ => return,
@@ -322,19 +315,15 @@ impl SidebarState {
         let wide = screen_width >= WIDE_MIN;
         let new_inner = match (wide, &self.inner) {
             // 缩小: Pinned → Hidden
-            (false, SidebarInner::Pinned { active_rail, .. }) => {
-                Some(SidebarInner::Hidden {
-                    active_rail: *active_rail,
-                    hover_blocked: false,
-                })
-            }
+            (false, SidebarInner::Pinned { active_rail, .. }) => Some(SidebarInner::Hidden {
+                active_rail: *active_rail,
+                hover_blocked: false,
+            }),
             // 放大: Hidden → Pinned
-            (true, SidebarInner::Hidden { active_rail, .. }) => {
-                Some(SidebarInner::Pinned {
-                    active_rail: *active_rail,
-                    is_user_pinned: false,
-                })
-            }
+            (true, SidebarInner::Hidden { active_rail, .. }) => Some(SidebarInner::Pinned {
+                active_rail: *active_rail,
+                is_user_pinned: false,
+            }),
             // 放大: Flyout* → Pinned
             (true, SidebarInner::FlyoutHoverPending { active_rail, .. }) => {
                 Some(SidebarInner::Pinned {
@@ -342,18 +331,14 @@ impl SidebarState {
                     is_user_pinned: false,
                 })
             }
-            (true, SidebarInner::FlyoutHover { active_rail, .. }) => {
-                Some(SidebarInner::Pinned {
-                    active_rail: *active_rail,
-                    is_user_pinned: false,
-                })
-            }
-            (true, SidebarInner::FlyoutClick { active_rail }) => {
-                Some(SidebarInner::Pinned {
-                    active_rail: Some(*active_rail),
-                    is_user_pinned: false,
-                })
-            }
+            (true, SidebarInner::FlyoutHover { active_rail, .. }) => Some(SidebarInner::Pinned {
+                active_rail: *active_rail,
+                is_user_pinned: false,
+            }),
+            (true, SidebarInner::FlyoutClick { active_rail }) => Some(SidebarInner::Pinned {
+                active_rail: Some(*active_rail),
+                is_user_pinned: false,
+            }),
             _ => None,
         };
         if let Some(inner) = new_inner {
@@ -383,7 +368,13 @@ impl SidebarState {
             (SidebarInner::FlyoutClick { .. }, _) => None,
 
             // Hover block 中，等待鼠标先离开 rail 再启用
-            (SidebarInner::Hidden { hover_blocked: true, .. }, _) => {
+            (
+                SidebarInner::Hidden {
+                    hover_blocked: true,
+                    ..
+                },
+                _,
+            ) => {
                 if hovered_rail.is_none() {
                     let active_rail = self.inner.active_rail();
                     self.inner = SidebarInner::Hidden {
@@ -405,12 +396,7 @@ impl SidebarState {
             }
 
             // Pending → 鼠标离开了 rail
-            (
-                SidebarInner::FlyoutHoverPending {
-                    active_rail, ..
-                },
-                None,
-            ) => {
+            (SidebarInner::FlyoutHoverPending { active_rail, .. }, None) => {
                 self.inner = SidebarInner::Hidden {
                     active_rail: *active_rail,
                     hover_blocked: false,
@@ -440,12 +426,7 @@ impl SidebarState {
             }
 
             // Pending → 不同 rail，重启计时
-            (
-                SidebarInner::FlyoutHoverPending {
-                    active_rail, ..
-                },
-                Some(rail),
-            ) => {
+            (SidebarInner::FlyoutHoverPending { active_rail, .. }, Some(rail)) => {
                 self.inner = SidebarInner::FlyoutHoverPending {
                     active_rail: *active_rail,
                     hover_rail: rail,
@@ -455,21 +436,15 @@ impl SidebarState {
             }
 
             // Hover 已可见 → 同一 rail，保持
-            (
-                SidebarInner::FlyoutHover { .. },
-                Some(rail),
-            ) if Some(rail) == self.inner.active_rail() => {
+            (SidebarInner::FlyoutHover { .. }, Some(rail))
+                if Some(rail) == self.inner.active_rail() =>
+            {
                 // Already showing, do nothing. Leave is handled by check_flyout_leave.
                 None
             }
 
             // Hover 已可见 → 不同 rail，立即切换
-            (
-                SidebarInner::FlyoutHover {
-                    active_rail, ..
-                },
-                Some(rail),
-            ) => {
+            (SidebarInner::FlyoutHover { active_rail, .. }, Some(rail)) => {
                 self.inner = SidebarInner::FlyoutHover {
                     active_rail: *active_rail,
                     hover_rail: rail,
@@ -503,8 +478,7 @@ pub fn render_overlays(
         _ => return,
     };
 
-    let scrim_color: egui::Color32 =
-        crate::material::color::access(|_p, s| s.scrim).into();
+    let scrim_color: egui::Color32 = crate::material::color::access(|_p, s| s.scrim).into();
 
     // scrim
     egui::Area::new(egui::Id::new("sidebar_scrim"))
