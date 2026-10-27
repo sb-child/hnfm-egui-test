@@ -1,4 +1,3 @@
-use lazy_static::lazy_static;
 use material_color_utilities_rs::{
     DynamicScheme, Hct, SpecVersion, TonalPalette, Variant,
     dynamiccolor::dynamic_scheme::DynamicSchemeOptions,
@@ -8,14 +7,7 @@ use std::collections::BTreeMap;
 
 use crate::material::{Color24, CoreColors, MaterialColorTheme, Palettes, Scheme, Schemes, Tone};
 
-lazy_static! {
-    static ref GLOBAL_SCHEME: std::sync::Arc<std::sync::RwLock<Option<crate::material::MaterialColorTheme>>> =
-        std::sync::Arc::new(std::sync::RwLock::new(None));
-    static ref GLOBAL_THEME_MODE: std::sync::Arc<std::sync::RwLock<ThemeMode>> =
-        std::sync::Arc::new(std::sync::RwLock::new(ThemeMode::Light));
-}
-
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ThemeMode {
     Light,
     LightMediumContrast,
@@ -23,6 +15,19 @@ pub enum ThemeMode {
     Dark,
     DarkMediumContrast,
     DarkHighContrast,
+}
+
+impl ThemeMode {
+    pub fn scheme(self, theme: &MaterialColorTheme) -> &Scheme {
+        match self {
+            Self::Light => &theme.schemes.light,
+            Self::LightMediumContrast => &theme.schemes.light_medium_contrast,
+            Self::LightHighContrast => &theme.schemes.light_high_contrast,
+            Self::Dark => &theme.schemes.dark,
+            Self::DarkMediumContrast => &theme.schemes.dark_medium_contrast,
+            Self::DarkHighContrast => &theme.schemes.dark_high_contrast,
+        }
+    }
 }
 
 const ALL_TONES: [Tone; 18] = [
@@ -376,41 +381,6 @@ pub fn generate_theme(tv: ThemeVariant) -> MaterialColorTheme {
         },
         palettes: build_palettes!(scheme_light),
     }
-}
-
-pub fn set_global_scheme(theme: MaterialColorTheme) {
-    let mut t = GLOBAL_SCHEME.write().unwrap();
-    t.replace(theme);
-    drop(t);
-}
-
-pub fn set_global_theme_mode(m: ThemeMode) {
-    let mut t = GLOBAL_THEME_MODE.write().unwrap();
-    *t = m;
-    drop(t);
-}
-
-pub fn access<F, R>(f: F) -> R
-where
-    F: FnOnce(&Palettes, &Scheme) -> R,
-{
-    let tm = GLOBAL_THEME_MODE.read().unwrap();
-    let tm_copy = tm.clone();
-    drop(tm);
-    let r = GLOBAL_SCHEME.read().unwrap();
-    let w = r.as_ref().unwrap();
-    let p = &w.palettes;
-    let s = match tm_copy {
-        ThemeMode::Light => &w.schemes.light,
-        ThemeMode::LightMediumContrast => &w.schemes.light_medium_contrast,
-        ThemeMode::LightHighContrast => &w.schemes.light_high_contrast,
-        ThemeMode::Dark => &w.schemes.dark,
-        ThemeMode::DarkMediumContrast => &w.schemes.dark_medium_contrast,
-        ThemeMode::DarkHighContrast => &w.schemes.dark_high_contrast,
-    };
-    let ret = f(p, s);
-    drop(r);
-    ret
 }
 
 #[cfg(test)]

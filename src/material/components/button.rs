@@ -18,11 +18,13 @@ use egui::{
 };
 
 use crate::fonts::ff_sans;
-use crate::material::color;
+use crate::material::Scheme;
 use crate::material::interact::{Hit, hit_rounded};
+use crate::material::m3_ui::M3Ui;
 use crate::material::motion::{self, Motion, MotionPrefs};
 use crate::material::state_layer;
 use crate::material::text::{self, TextLayout, TextStyle};
+use crate::material::theme::Theme;
 use crate::material::tokens;
 use crate::material::util;
 
@@ -113,9 +115,11 @@ pub enum ButtonWidth {
 /// `"toolbar_save"`；它会作为 egui 的 `Id` 和动画 ID 的根。
 ///
 /// ```ignore
-/// let hit = Button::new("save", "保存")
+/// let mut m = M3Ui::new(ui, &theme, MotionPrefs::DEFAULT);
+/// let hit = m
+///     .button("save", "保存")
 ///     .variant(ButtonVariant::Filled)
-///     .ui(ui);
+///     .show(&mut m);
 /// if hit.clicked() {
 ///     save();
 /// }
@@ -129,7 +133,7 @@ pub struct Button<'a> {
     shape: ButtonShape,
     width: ButtonWidth,
     enabled: bool,
-    motion: MotionPrefs,
+    motion: Option<MotionPrefs>,
 }
 
 impl<'a> Button<'a> {
@@ -143,7 +147,7 @@ impl<'a> Button<'a> {
             shape: ButtonShape::Round,
             width: ButtonWidth::Hug,
             enabled: true,
-            motion: MotionPrefs::DEFAULT,
+            motion: None,
         }
     }
 
@@ -177,13 +181,20 @@ impl<'a> Button<'a> {
         self
     }
 
-    /// 动效偏好。默认 [`MotionPrefs::DEFAULT`]。
+    /// 覆盖 [`M3Ui`] 提供的动效偏好。
     pub fn motion(mut self, motion: MotionPrefs) -> Self {
-        self.motion = motion;
+        self.motion = Some(motion);
         self
     }
 
-    pub fn ui(self, ui: &mut Ui) -> Hit {
+    pub fn show(self, m: &mut M3Ui<'_>) -> Hit {
+        let prefs = self.motion.unwrap_or_else(|| m.motion());
+        let theme = m.theme();
+        let ui = m.ui();
+        self.show_in(ui, theme, prefs)
+    }
+
+    fn show_in(self, ui: &mut Ui, theme: &Theme, prefs: MotionPrefs) -> Hit {
         let enabled = self.enabled && ui.is_enabled();
         let metrics = self.measure(ui);
         let width = self.resolve_width(ui, &metrics);
@@ -199,8 +210,8 @@ impl<'a> Button<'a> {
         let id = Id::unique(self.key);
         let hit = hit_rounded(ui, id, rect, radius_rest, enabled);
 
-        let colors = button_colors(self.variant, enabled);
-        let anim = transitions(ui, id, &hit, enabled, self.motion);
+        let colors = button_colors(theme.scheme(), self.variant, enabled);
+        let anim = transitions(ui, id, &hit, enabled, prefs);
         let radius = util::lerp_corner_radius(radius_rest, radius_pressed, anim.shape);
         let layer_alpha = state_layer::alpha(anim.hover, anim.press, anim.focus);
 
@@ -406,24 +417,13 @@ struct ButtonColors {
 /// - `buttons/specs`: 变体颜色映射。
 /// - `DButton.qml`: `backgroundColor` / `textColor`。
 /// - `StateLayer.qml`: state color。
-fn button_colors(variant: ButtonVariant, enabled: bool) -> ButtonColors {
-    let (primary, on_primary, secondary_container, on_secondary_container, outline, on_surface): (
-        Color32,
-        Color32,
-        Color32,
-        Color32,
-        Color32,
-        Color32,
-    ) = color::access(|_p, s| {
-        (
-            s.primary.into(),
-            s.on_primary.into(),
-            s.secondary_container.into(),
-            s.on_secondary_container.into(),
-            s.outline.into(),
-            s.on_surface.into(),
-        )
-    });
+fn button_colors(scheme: &Scheme, variant: ButtonVariant, enabled: bool) -> ButtonColors {
+    let primary: Color32 = scheme.primary.into();
+    let on_primary: Color32 = scheme.on_primary.into();
+    let secondary_container: Color32 = scheme.secondary_container.into();
+    let on_secondary_container: Color32 = scheme.on_secondary_container.into();
+    let outline: Color32 = scheme.outline.into();
+    let on_surface: Color32 = scheme.on_surface.into();
 
     if !enabled {
         let disabled_text = with_alpha(on_surface, 0.38);

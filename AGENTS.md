@@ -45,8 +45,9 @@ Rust 侧对应：
 - `motion.rs`: `DAnim` / `Anims`。
 - `interact.rs`: `StyledButton` 的命中与交互状态。
 - `state_layer.rs`: `StateLayer`。
-- `button.rs`: `DButton`。
-- 待建：`icon.rs`、`spinner.rs`、`ripple.rs`、`tooltip.rs`、显式 `Theme` / `M3Ui`。
+- `theme.rs` / `m3_ui.rs`: 显式主题与每帧上下文。
+- `components/`: 可显示组件；`button.rs` 对应 `DButton`，`card.rs` 对应 `DCard`。
+- 待建：`icon.rs`、`spinner.rs`、`ripple.rs`、`tooltip.rs`。
 
 ## 组件契约
 
@@ -76,7 +77,7 @@ Rust 侧对应：
 ### 调用形态
 
 - 优先 `M3Ui` + typed builders；主题和动效偏好每帧显式传入，不用全局单例。
-- 现有 `color::access` / `set_global_scheme` 是迁移遗留；新组件不要依赖全局主题，迁移时改为显式传入。
+- 组件从 `M3Ui` 取 `Theme` 和 `MotionPrefs`；`color::access` / 全局主题已移除。
 - 组件方法返回可判断点击的响应（优先 `Response`；需要圆角命中时用显式 `Hit`），保留 `m.ui()` 作为原生 egui escape hatch。
 - 每个组件在文档里写清“尺寸 + 动效 + 命中”契约。
 
@@ -99,9 +100,10 @@ Rust 侧对应：
 2. `motion.rs`
 3. `interact.rs`
 4. `text.rs`
-5. `button.rs`
-6. 2 到 3 个真实调用点
-7. 再决定 `ListItem` / `IconButton` / `NavRail` 是否复用同一套抽象
+5. `theme.rs` / `m3_ui.rs`
+6. `components/button.rs`
+7. 2 到 3 个真实调用点
+8. 再决定 `ListItem` / `IconButton` / `NavRail` 是否复用同一套抽象
 
 ## 准则
 

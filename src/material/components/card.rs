@@ -8,7 +8,8 @@
 
 use egui::{Color32, CornerRadius, InnerResponse, RichText, Stroke, Ui};
 
-use crate::material::color;
+use crate::material::Scheme;
+use crate::material::m3_ui::M3Ui;
 use crate::material::tokens;
 
 /// 卡片色调。
@@ -37,11 +38,12 @@ pub enum CardWidth {
 /// M3 卡片容器。
 ///
 /// ```ignore
-/// Card::new()
+/// let mut m = M3Ui::new(ui, &theme, MotionPrefs::DEFAULT);
+/// m.card()
 ///     .title("Buttons")
 ///     .width(CardWidth::Fill)
-///     .show(ui, |ui| {
-///         Button::new("save", "保存").ui(ui);
+///     .show(&mut m, |m| {
+///         m.button("save", "保存").show(m);
 ///     });
 /// ```
 pub struct Card<'a> {
@@ -106,8 +108,14 @@ impl<'a> Card<'a> {
     }
 
     /// 绘制卡片背景，然后执行内容闭包。
-    pub fn show<R>(self, ui: &mut Ui, add_contents: impl FnOnce(&mut Ui) -> R) -> InnerResponse<R> {
-        let colors = card_colors(self.tone);
+    pub fn show<R>(
+        self,
+        m: &mut M3Ui<'_>,
+        add_contents: impl FnOnce(&mut M3Ui<'_>) -> R,
+    ) -> InnerResponse<R> {
+        let theme = m.theme();
+        let motion = m.motion();
+        let colors = card_colors(theme.scheme(), self.tone);
         let padding = self.padding.round().clamp(0.0, i8::MAX as f32) as i8;
         let stroke = if self.border {
             Stroke::new(tokens::OUTLINE_WIDTH, colors.border)
@@ -124,6 +132,7 @@ impl<'a> Card<'a> {
             stroke,
         };
 
+        let ui = m.ui();
         frame.show(ui, |ui| {
             self.apply_width(ui);
 
@@ -142,7 +151,8 @@ impl<'a> Card<'a> {
                 ui.add_space(gap);
             }
 
-            add_contents(ui)
+            let mut child = M3Ui::new(ui, theme, motion);
+            add_contents(&mut child)
         })
     }
 
@@ -168,22 +178,22 @@ struct CardColors {
 }
 
 /// 来源: `DTone.qml` 的 `containerColor` / `contentColor` / `accentColor`。
-fn card_colors(tone: CardTone) -> CardColors {
-    color::access(|_p, s| CardColors {
+fn card_colors(scheme: &Scheme, tone: CardTone) -> CardColors {
+    CardColors {
         fill: match tone {
-            CardTone::Surface => s.surface_container.into(),
-            CardTone::Primary => s.primary_container.into(),
-            CardTone::Secondary => s.secondary_container.into(),
-            CardTone::Tertiary => s.tertiary_container.into(),
+            CardTone::Surface => scheme.surface_container.into(),
+            CardTone::Primary => scheme.primary_container.into(),
+            CardTone::Secondary => scheme.secondary_container.into(),
+            CardTone::Tertiary => scheme.tertiary_container.into(),
         },
         accent: match tone {
-            CardTone::Surface => s.primary.into(),
-            CardTone::Primary => s.on_primary_container.into(),
-            CardTone::Secondary => s.on_secondary_container.into(),
-            CardTone::Tertiary => s.on_tertiary_container.into(),
+            CardTone::Surface => scheme.primary.into(),
+            CardTone::Primary => scheme.on_primary_container.into(),
+            CardTone::Secondary => scheme.on_secondary_container.into(),
+            CardTone::Tertiary => scheme.on_tertiary_container.into(),
         },
-        border: s.outline_variant.into(),
-    })
+        border: scheme.outline_variant.into(),
+    }
 }
 
 #[cfg(test)]
