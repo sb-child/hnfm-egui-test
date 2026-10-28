@@ -23,9 +23,9 @@ pub struct Color24 {
     pub b: u8,
 }
 
-impl Into<Color32> for Color24 {
-    fn into(self) -> Color32 {
-        Color32::from_rgb(self.r, self.g, self.b)
+impl From<Color24> for Color32 {
+    fn from(val: Color24) -> Self {
+        Color32::from_rgb(val.r, val.g, val.b)
     }
 }
 

@@ -1,13 +1,44 @@
 use egui::Stroke;
 
-use crate::material::color::ThemeVariant;
+use crate::material::color::{ThemeMode, ThemeVariant};
 use crate::material::components::{
     ButtonShape, ButtonSize, ButtonVariant, ButtonWidth, CardWidth, Icon, TextWrap, TooltipSide,
 };
 use crate::{fonts, icons, material};
 
+/// 两个 Cmf 主题色轮换。
+const COLOR_VARIANTS: [(&str, ThemeVariant); 2] = [
+    (
+        "蓝紫",
+        ThemeVariant::Cmf {
+            primary: 0xff769cdf,
+            secondary: Some(0xff8991a2),
+        },
+    ),
+    (
+        "青绿",
+        ThemeVariant::Cmf {
+            primary: 0xff4c9a7c,
+            secondary: Some(0xff7fa593),
+        },
+    ),
+];
+
+/// `ThemeMode` 轮换顺序：浅色在前，对比度递增。
+const THEME_MODES: [(&str, ThemeMode); 6] = [
+    ("浅色", ThemeMode::Light),
+    ("浅色中对比", ThemeMode::LightMediumContrast),
+    ("浅色高对比", ThemeMode::LightHighContrast),
+    ("深色", ThemeMode::Dark),
+    ("深色中对比", ThemeMode::DarkMediumContrast),
+    ("深色高对比", ThemeMode::DarkHighContrast),
+];
+
 pub struct AppLayout {
-    theme: material::Theme,
+    /// 按 [`COLOR_VARIANTS`] 预生成，切换时只重建 [`material::Theme`]。
+    color_themes: [material::MaterialColorTheme; 2],
+    variant_index: usize,
+    mode_index: usize,
     demo_clicks: u32,
 }
 
@@ -16,14 +47,12 @@ impl AppLayout {
         fonts::add_fonts(&cc.egui_ctx);
         icons::add_icon_font(&cc.egui_ctx);
         fonts::configure_text_styles(&cc.egui_ctx, fonts::TextStyleOpt::Sans);
-        let color_theme = material::color::generate_theme(ThemeVariant::Cmf {
-            primary: 0xff769CDF,
-            secondary: Some(0xff8991A2),
-        });
-        let theme =
-            material::Theme::from_color_theme(&color_theme, material::color::ThemeMode::Dark);
         Self {
-            theme,
+            color_themes: COLOR_VARIANTS
+                .map(|(_, variant)| material::color::generate_theme(variant)),
+            variant_index: 0,
+            // 默认深色，和之前的 demo 一致。
+            mode_index: 3,
             demo_clicks: 0,
         }
     }
@@ -31,7 +60,9 @@ impl AppLayout {
 
 impl eframe::App for AppLayout {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
-        let surface_color = self.theme.scheme().surface.into();
+        let mode = THEME_MODES[self.mode_index].1;
+        let theme = material::Theme::from_color_theme(&self.color_themes[self.variant_index], mode);
+        let surface_color = theme.scheme().surface.into();
         let content_frame = egui::containers::Frame {
             inner_margin: egui::epaint::Margin::symmetric(
                 material::tokens::SPACING_L as i8,
@@ -44,18 +75,54 @@ impl eframe::App for AppLayout {
             stroke: Stroke::NONE,
         };
 
-        let theme = &self.theme;
+        let theme = &theme;
         let demo_clicks = &mut self.demo_clicks;
+        let variant_index = &mut self.variant_index;
+        let mode_index = &mut self.mode_index;
         egui::CentralPanel::default()
             .frame(content_frame)
             .show(ui, |ui| {
                 let mut m = material::M3Ui::new(ui, theme, material::MotionPrefs::DEFAULT);
-                content(&mut m, demo_clicks);
+                content(&mut m, demo_clicks, variant_index, mode_index);
             });
     }
 }
 
-fn content(m: &mut material::M3Ui<'_>, demo_clicks: &mut u32) {
+/// 轮换主题色和明暗模式。
+///
+/// 点击后只改索引，[`AppLayout::ui`] 在下一帧重建主题，所以背景色会晚一帧。
+fn theme_controls(m: &mut material::M3Ui<'_>, variant_index: &mut usize, mode_index: &mut usize) {
+    m.horizontal_wrapped(|m| {
+        let color_label = format!("主题色: {}", COLOR_VARIANTS[*variant_index].0);
+        if m.button("btn_theme_color", &color_label)
+            .variant(ButtonVariant::Tonal)
+            .icon(Icon::PALETTE)
+            .show(m)
+            .clicked()
+        {
+            *variant_index = (*variant_index + 1) % COLOR_VARIANTS.len();
+        }
+
+        let mode_label = format!("模式: {}", THEME_MODES[*mode_index].0);
+        if m.button("btn_theme_mode", &mode_label)
+            .variant(ButtonVariant::Tonal)
+            .icon(Icon::CONTRAST)
+            .show(m)
+            .clicked()
+        {
+            *mode_index = (*mode_index + 1) % THEME_MODES.len();
+        }
+    });
+}
+
+fn content(
+    m: &mut material::M3Ui<'_>,
+    demo_clicks: &mut u32,
+    variant_index: &mut usize,
+    mode_index: &mut usize,
+) {
+    theme_controls(m, variant_index, mode_index);
+
     m.card()
         .title("M3 Button")
         .width(CardWidth::Fill)
